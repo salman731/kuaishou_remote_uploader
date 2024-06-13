@@ -10,11 +10,15 @@ class WebViewUtils
    String? resultUrl;
    Completer? videoLinkCompleter;
    String? finalUrl;
+   Timer? timer;
 
   Future<String> getUrlWithWebView(String url,String urlExtension,{Map<String,String>? header}) async
   {
     videoLinkCompleter = Completer();
     finalUrl = "";
+    timer = Timer(Duration(seconds: 12),(){
+      videoLinkCompleter!.complete();
+    });
     headlessWebView = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(url),headers: header),
       initialSize: Size(1366,768),
@@ -26,6 +30,7 @@ class WebViewUtils
               if(finalUrl!.isEmpty)
                 {
                   finalUrl = request.url.rawValue;
+                  timer!.cancel();
                   videoLinkCompleter!.complete();
                 }
             }

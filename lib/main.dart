@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
+import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/widgets/custom_button.dart';
 import 'package:sizer/sizer.dart';
 
@@ -68,6 +69,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void initState() {
+
     appController.loginToStreamTape();
   }
 
@@ -89,35 +91,87 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: FutureBuilder<StreamTapeFolder>(
-          future:  appController.getFolderList(),
-            builder: (context, snapshot) {
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child:Obx(()=>appController.isLoading.value
+              ? Center(child: CircularProgressIndicator()) : Center(
+            // Center is a layout widget. It takes a single child and positions it
+            // in the middle of the parent.
+            child: Column(
+              // Column is also a layout widget. It takes a list of children and
+              // arranges them vertically. By default, it sizes itself to fit its
+              // children horizontally, and tries to be as tall as its parent.
+              //
+              // Column has various properties to control how it sizes itself and
+              // how it positions its children. Here we use mainAxisAlignment to
+              // center the children vertically; the main axis here is the vertical
+              // axis because Columns are vertical (the cross axis would be
+              // horizontal).
+              //
+              // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
+              // action in the IDE, or press "p" in the console), to see the
+              // wireframe for each widget.
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+               GetBuilder<AppController>(
+                 id: "updateDownloadingList",
+                 builder: (_)
+                 {
+                   return Column(
+                     children: [
+                       Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
 
-            if(snapshot.hasData)
-            {
-        return Center(
-          // Center is a layout widget. It takes a single child and positions it
-          // in the middle of the parent.
-          child: Column(
-            // Column is also a layout widget. It takes a list of children and
-            // arranges them vertically. By default, it sizes itself to fit its
-            // children horizontally, and tries to be as tall as its parent.
-            //
-            // Column has various properties to control how it sizes itself and
-            // how it positions its children. Here we use mainAxisAlignment to
-            // center the children vertically; the main axis here is the vertical
-            // axis because Columns are vertical (the cross axis would be
-            // horizontal).
-            //
-            // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-            // action in the IDE, or press "p" in the console), to see the
-            // wireframe for each widget.
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Obx(()=>Center(
-                child: Container(
+                       Container(
+                         padding: EdgeInsets.all(12),
+                         height: 300,
+                         child: ListView.builder(
+                             shrinkWrap: true,
+                             itemCount: appController.downloadingList.length,
+                             itemBuilder: (context,index){
+                               return Padding(
+                                 padding: const EdgeInsets.all(8.0),
+                                 child: Text(appController.downloadingList[index],style: TextStyle(fontSize: 10),),
+                               );
+                             }),
+                       )
+                     ],
+                   );
+                 },
+               ),
+
+                Obx(()=>Center(
+                  child: Container(
+                    padding: EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(// Background color
+                      borderRadius: BorderRadius.circular(5.0),
+                      border: Border.all(
+                        color: Colors.black, // Border color
+                        width: 2.0,
+                      ),
+                    ),
+                    child: DropdownButton<StreamTapeFolderItem>(
+                      value: appController.selectedFolder.value,
+                      //iconEnabledColor: AppColors.red,
+                      isExpanded: true,
+                      onChanged: ( newValue) {
+                        appController.selectedFolder.value = newValue!;
+                        SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, newValue.name!);
+                      },
+                      items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                        return DropdownMenuItem<StreamTapeFolderItem>(
+                          value: value,
+                          child: Text("${value.name}"),
+                        );
+                      }).toList(),
+                      //dropdownColor: Colors.black, // Dropdown background color
+                      underline: SizedBox(), // Remove default underline
+                    ),
+                  ),
+                ),
+                ),
+                SizedBox(height: 10,),
+                Container(
                   padding: EdgeInsets.all(8.0),
                   decoration: BoxDecoration(// Background color
                     borderRadius: BorderRadius.circular(5.0),
@@ -126,53 +180,26 @@ class _MyHomePageState extends State<MyHomePage> {
                       width: 2.0,
                     ),
                   ),
-                  child: DropdownButton<StreamTapeFolderItem>(
-                    value: appController.selectedFolder.value,
-                    //iconEnabledColor: AppColors.red,
-                    isExpanded: true,
-                    onChanged: ( newValue) {
-                      appController.selectedFolder.value = newValue!;
-                    },
-                    items:snapshot.data!.folders!.map((StreamTapeFolderItem value) {
-                      return DropdownMenuItem<StreamTapeFolderItem>(
-                        value: value,
-                        child: Text("${value.name}"),
-                      );
-                    }).toList(),
-                    //dropdownColor: Colors.black, // Dropdown background color
-                    underline: SizedBox(), // Remove default underline
+                  height: 200, //     <-- TextField expands to this height.
+                  child: TextField(
+                    controller: appController.urlTextEditingController,
+                    maxLines: null, // Set this
+                    expands: true, // and this
+                    keyboardType: TextInputType.multiline,
                   ),
                 ),
-              ),
-              ),
-              SizedBox(height: 10,),
-              Container(
-                padding: EdgeInsets.all(8.0),
-                decoration: BoxDecoration(// Background color
-                  borderRadius: BorderRadius.circular(5.0),
-                  border: Border.all(
-                    color: Colors.black, // Border color
-                    width: 2.0,
-                  ),
-                ),
-                height: 200, //     <-- TextField expands to this height.
-                child: TextField(
-                  controller: appController.urlTextEditingController,
-                  maxLines: null, // Set this
-                  expands: true, // and this
-                  keyboardType: TextInputType.multiline,
-                ),
-              ),
-            ],
-          ),
-        );
-            }
-            return Center(child: CircularProgressIndicator(),);
-          }),
+              ],
+            ),
+          ))
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async  {
            await appController.startUploading(appController.urlTextEditingController.text);
+           await Future.delayed(Duration(seconds: 3));
+           if (!appController.isDownloadStatusUpdating) {
+             await appController.getDownloadingVideoStatus(isUpdateList: true);
+           }
         },
         tooltip: 'Upload',
         child: const Icon(Icons.upload),

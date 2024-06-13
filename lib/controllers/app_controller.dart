@@ -10,6 +10,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
+import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/web_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/web_view_utils.dart';
 
@@ -22,6 +23,7 @@ class AppController extends GetxController
   String STREAMTAPE_URL = "https://streamtape.com/";
   String STREAMTAPE_FILE_API_URL = "https://streamtape.com/api/website/filemanager/file/get";
   String STREAMTAPE_REMOTE_UPLOAD_API_URL = "https://streamtape.com/api/website/remotedl/put";
+  String STREAMTAPE_DOWNLOADING_STATUS_API_URL = "https://streamtape.com/api/website/remotedl/get";
 
   HeadlessInAppWebView? headlessInAppWebView;
   InAppWebViewController? inAppWebViewController;
@@ -30,22 +32,36 @@ class AppController extends GetxController
   late Rx<StreamTapeFolderItem> selectedFolder = StreamTapeFolderItem().obs;
   TextEditingController urlTextEditingController = TextEditingController();
 
-  Completer? loadCompleter;
+  RxBool isLoading = true.obs;
+
+  StreamTapeFolder? streamTapeFolder;
+  List<String> downloadingList = [];
+  Timer? downloadUpdatingTimer;
+  bool isDownloadStatusUpdating = false;
+
+  initTimer()
+  {
+    downloadUpdatingTimer = Timer.periodic(Duration(seconds: 20), (timer) async {
+      if (!isDownloadStatusUpdating) {
+        await getDownloadingVideoStatus(isUpdateList: true);
+      }
+    });
+  }
 
   Future<void> loginToStreamTape() async
   {
     //CookieManager.instance().deleteAllCookies();
-    loadCompleter = Completer();
+    await SharedPrefsUtil.initSharedPreference();
     headlessInAppWebView = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(STREAMTAPE_URL)),
       initialSize: Size(1366,768),
-      initialSettings: InAppWebViewSettings(isInspectable: false,useShouldInterceptRequest: true,useShouldOverrideUrlLoading: true),
+      initialSettings: InAppWebViewSettings(isInspectable: false,userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"),
       onWebViewCreated: (controller)
       {
         inAppWebViewController = controller;
       },
       onLoadStart: (controller, url) async {
-        LoaderDialog.showLoaderDialog(Get.context!,text: "Getting Login Info.....");
+        isLoading.value = true;
       },
      /* shouldInterceptRequest: (controller,request) async
       {
@@ -64,6 +80,7 @@ class AppController extends GetxController
         }
       },*/
       onLoadStop: (controller, url) async {
+
         String? html = await inAppWebViewController!.getHtml();
         dom.Document document = WebUtils.getDomfromHtml(html!);
         String loginTxt = document.querySelector('.navbar-nav li:nth-child(3) a')!.text;
@@ -79,15 +96,18 @@ class AppController extends GetxController
 
             }
             currentCookie = cookieList.join(';');
-            LoaderDialog.stopLoaderDialog();
-            loadCompleter!.complete();
+            streamTapeFolder = await getFolderList();
+            await getDownloadingVideoStatus();
+            initTimer();
+            isLoading.value = false;
+            return;
           }
         // Click on login or account panel
-        if((loginTxt == "Account Panel" || loginTxt == "Login") && url!.rawValue == STREAMTAPE_URL)
+        if((loginTxt == "Login") && url!.rawValue == STREAMTAPE_URL)
           {
             await inAppWebViewController!.evaluateJavascript(source: ""
                 "var clickEvent = new MouseEvent(\"click\", {\"view\": window,\"bubbles\": true,\"cancelable\": false});"
-                "var element = document.querySelector('.navbar-nav li:nth-child(2) a');"
+                "var element = document.querySelector(\".navbar-nav li:nth-child(2) a\");"
                 "element.dispatchEvent(clickEvent);");
             return;
 
@@ -117,12 +137,20 @@ class AppController extends GetxController
 
   Future<StreamTapeFolder> getFolderList () async
   {
-    await loadCompleter!.future;
+
     StreamTapeFolder streamTapeFolder;
     var bodyMap = {"id":"0","_csrf":crfToken};
     String? respose = await WebUtils.makePostRequest(STREAMTAPE_FILE_API_URL,bodyMap,headers: {"Cookie":currentCookie});
     streamTapeFolder = StreamTapeFolder.fromJson(jsonDecode(respose));
-    selectedFolder.value = streamTapeFolder.folders!.first;
+    String? selectedFolderSP = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER,defaultValue: "");
+    if(selectedFolderSP.isNotEmpty)
+      {
+        selectedFolder.value = streamTapeFolder.folders!.where((e) => e.name == selectedFolderSP).first;
+      }
+    else
+      {
+        selectedFolder.value = streamTapeFolder.folders!.first;
+      }
     return streamTapeFolder;
     //return streamTapeFolder;
   }
@@ -143,7 +171,9 @@ class AppController extends GetxController
   Future<String?> getFlvUrlfromKuaihsouLink (String kuaishouLink) async
   {
     String? orginalUrl = await WebUtils.getOriginalUrl(kuaishouLink);
-    String flvurl = await WebViewUtils().getUrlWithWebView(orginalUrl!, ".flv");
+    WebViewUtils webViewUtils = WebViewUtils();
+    String flvurl = await webViewUtils.getUrlWithWebView(orginalUrl!, ".flv");
+    await webViewUtils.disposeWebView();
     return flvurl;
   }
 
@@ -155,10 +185,36 @@ class AppController extends GetxController
     for (String url in urls)
       {
          String? flvUrl = await getFlvUrlfromKuaihsouLink(url);
-         await remoteUploadStreamTape(flvUrl!, selectedFolder.value.id!);
+         if(flvUrl!.isNotEmpty)
+           {
+             await remoteUploadStreamTape(flvUrl!, selectedFolder.value.id!);
+           }
       }
 
     LoaderDialog.stopLoaderDialog();
+  }
+
+  Future getDownloadingVideoStatus({bool isUpdateList = false}) async
+  {
+    isDownloadStatusUpdating = true;
+    try {
+      downloadingList.clear();
+      String? response = await WebUtils.makeGetRequest(STREAMTAPE_DOWNLOADING_STATUS_API_URL,headers: {"Cookie":currentCookie});
+      Map<String,dynamic> jsonMap = jsonDecode(response!);
+      List<dynamic> list = (jsonMap["data"] as List<dynamic>);
+      for (dynamic item in list)
+            {
+              downloadingList.add(item["url"]);
+            }
+      if(isUpdateList)
+            {
+              this.update(["updateDownloadingList"]);
+            }
+    } catch (e) {
+      isDownloadStatusUpdating = false;
+      print(e);
+    }
+    isDownloadStatusUpdating = false;
   }
 
 }
