@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
+import 'package:kuaishou_remote_uploader/dialogs/video_player_dialog.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
@@ -73,6 +74,22 @@ class _MyHomePageState extends State<MyHomePage> {
     appController.loginToStreamTape();
   }
 
+  getTextColor(String status)
+  {
+    if(status == "downloading")
+      {
+        return Colors.green;
+      }
+    else if (status == "error")
+      {
+        return Colors.red;
+      }
+    else
+      {
+        return Colors.black;
+      }
+  }
+
   @override
   Widget build(BuildContext context) {
     // This method is rerun every time setState is called, for instance as done
@@ -114,31 +131,7 @@ class _MyHomePageState extends State<MyHomePage> {
               // wireframe for each widget.
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-               GetBuilder<AppController>(
-                 id: "updateDownloadingList",
-                 builder: (_)
-                 {
-                   return Column(
-                     children: [
-                       Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
 
-                       Container(
-                         padding: EdgeInsets.all(12),
-                         height: 300,
-                         child: ListView.builder(
-                             shrinkWrap: true,
-                             itemCount: appController.downloadingList.length,
-                             itemBuilder: (context,index){
-                               return Padding(
-                                 padding: const EdgeInsets.all(8.0),
-                                 child: Text(appController.downloadingList[index],style: TextStyle(fontSize: 10),),
-                               );
-                             }),
-                       )
-                     ],
-                   );
-                 },
-               ),
 
                 Obx(()=>Center(
                   child: Container(
@@ -180,13 +173,41 @@ class _MyHomePageState extends State<MyHomePage> {
                       width: 2.0,
                     ),
                   ),
-                  height: 200, //     <-- TextField expands to this height.
+                  height: 150, //     <-- TextField expands to this height.
                   child: TextField(
                     controller: appController.urlTextEditingController,
                     maxLines: null, // Set this
                     expands: true, // and this
                     keyboardType: TextInputType.multiline,
                   ),
+                ),
+                SizedBox(height: 10,),
+                GetBuilder<AppController>(
+                  id: "updateDownloadingList",
+                  builder: (_)
+                  {
+                    return Column(
+                      children: [
+                        Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
+
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          height: 300,
+                          child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: appController.downloadingList.length,
+                              itemBuilder: (context,index){
+                                return ListTile(onTap: () async {
+                                  await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                                },title: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
+                                ));
+                              }),
+                        )
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

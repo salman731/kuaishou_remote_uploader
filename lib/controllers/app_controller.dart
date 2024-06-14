@@ -8,6 +8,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
+import 'package:kuaishou_remote_uploader/models/streamtape_download_status.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
@@ -35,7 +36,7 @@ class AppController extends GetxController
   RxBool isLoading = true.obs;
 
   StreamTapeFolder? streamTapeFolder;
-  List<String> downloadingList = [];
+  List<StreamtapeDownloadStatus> downloadingList = [];
   Timer? downloadUpdatingTimer;
   bool isDownloadStatusUpdating = false;
 
@@ -185,7 +186,7 @@ class AppController extends GetxController
     for (String url in urls)
       {
          String? flvUrl = await getFlvUrlfromKuaihsouLink(url);
-         if(flvUrl!.isNotEmpty)
+         if(flvUrl!.isNotEmpty && !isUrlExistsInDownlodingList(flvUrl))
            {
              await remoteUploadStreamTape(flvUrl!, selectedFolder.value.id!);
            }
@@ -204,7 +205,8 @@ class AppController extends GetxController
       List<dynamic> list = (jsonMap["data"] as List<dynamic>);
       for (dynamic item in list)
             {
-              downloadingList.add(item["url"]);
+
+              downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"]));
             }
       if(isUpdateList)
             {
@@ -215,6 +217,22 @@ class AppController extends GetxController
       print(e);
     }
     isDownloadStatusUpdating = false;
+  }
+
+  bool isUrlExistsInDownlodingList (String url)
+  {
+    Uri currentUri = Uri.parse(url);
+    String currentUrl = currentUri.origin + currentUri.path;
+    for (StreamtapeDownloadStatus streamtapeDownloadStatus in downloadingList)
+      {
+        Uri downloadingUri = Uri.parse(streamtapeDownloadStatus.url!);
+        String downloadUrl = downloadingUri.origin + downloadingUri.path;
+        if(downloadUrl == currentUrl && streamtapeDownloadStatus.status == "downloading");
+        {
+          return true;
+        }
+      }
+    return false;
   }
 
 }
