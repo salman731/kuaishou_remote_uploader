@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
@@ -62,6 +63,7 @@ class AppController extends GetxController
         inAppWebViewController = controller;
       },
       onLoadStart: (controller, url) async {
+        showToast("Webpage Start Loading.....");
         isLoading.value = true;
       },
      /* shouldInterceptRequest: (controller,request) async
@@ -101,6 +103,7 @@ class AppController extends GetxController
             await getDownloadingVideoStatus();
             initTimer();
             isLoading.value = false;
+            showToast("Webpage Loading Completed .....");
             return;
           }
         // Click on login or account panel
@@ -159,6 +162,7 @@ class AppController extends GetxController
   Future<bool> remoteUploadStreamTape (String url,String folder) async
   {
     try {
+      showToast("Uploading to Streamtape .....");
       var bodyMap = {"links":url,"headers":"","folder":folder,"_csrf":crfToken};
       String? response = await WebUtils.makePostRequest(STREAMTAPE_REMOTE_UPLOAD_API_URL, bodyMap,headers: {"Cookie":currentCookie});
       Map<String,dynamic> json = jsonDecode(response);
@@ -171,6 +175,8 @@ class AppController extends GetxController
 
   Future<String?> getFlvUrlfromKuaihsouLink (String kuaishouLink) async
   {
+
+    showToast("Fetching Kuaishou Flv Url .....");
     String? orginalUrl = await WebUtils.getOriginalUrl(kuaishouLink);
     WebViewUtils webViewUtils = WebViewUtils();
     String flvurl = await webViewUtils.getUrlWithWebView(orginalUrl!, ".flv");
@@ -227,12 +233,25 @@ class AppController extends GetxController
       {
         Uri downloadingUri = Uri.parse(streamtapeDownloadStatus.url!);
         String downloadUrl = downloadingUri.origin + downloadingUri.path;
-        if(downloadUrl == currentUrl && streamtapeDownloadStatus.status == "downloading");
+        if(downloadUrl == currentUrl && streamtapeDownloadStatus.status == "downloading")
         {
           return true;
         }
       }
     return false;
+  }
+
+  showToast (String text)
+  {
+    Fluttertoast.showToast(
+        msg: text,
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 1,
+        backgroundColor: Colors.blue,
+        textColor: Colors.white,
+        fontSize: 16.0
+    );
   }
 
 }
