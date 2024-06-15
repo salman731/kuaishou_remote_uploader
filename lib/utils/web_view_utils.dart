@@ -16,7 +16,7 @@ class WebViewUtils
   {
     videoLinkCompleter = Completer();
     finalUrl = "";
-    timer = Timer(Duration(seconds: 12),(){
+    timer = Timer(Duration(seconds: 20),(){
       videoLinkCompleter!.complete();
     });
     headlessWebView = HeadlessInAppWebView(

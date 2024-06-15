@@ -199,7 +199,9 @@ class _MyHomePageState extends State<MyHomePage> {
                               itemBuilder: (context,index){
                                 return ListTile(onTap: () async {
                                   await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
-                                },title: Padding(
+                                },
+                                 leading: Text((index+1).toString(),style:TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) )),
+                                 title: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
                                 ));
