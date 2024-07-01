@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SharedPrefsUtil
 {
   static final KEY_SELECTED_FOLDER = "SP_SELECTED_FOLDER";
+  static final KEY_STREAMTAPE_COOKIE = "SP_STREAMTAPE_COOKIE";
+  static final KEY_STREAMTAPE_CSRF_TOKEN = "SP_STREAMTAPE_CSRF_TOKEN";
 
   static late SharedPreferences sharedPreferences;
 
