@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
+import 'package:hive/hive.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_download_status.dart';
@@ -53,8 +54,13 @@ class AppController extends GetxController
   Timer? downloadUpdatingTimer;
   RxBool isDownloadStatusUpdating = false.obs;
   Completer downloadingCompleter = Completer();
+  late Box downloadingListIdBox;
 
- /* initTimer()
+  ScrollController scrollController = ScrollController();
+
+  String logText = "";
+
+  /* initTimer()
   {
     downloadUpdatingTimer = Timer.periodic(Duration(seconds: 20), (timer) async {
       if (!isDownloadStatusUpdating.value) {
@@ -67,6 +73,7 @@ class AppController extends GetxController
   {
     //CookieManager.instance().deleteAllCookies();
     await SharedPrefsUtil.initSharedPreference();
+    downloadingListIdBox = await Hive.openBox("downloadingListId");
     String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
     String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
     if(isRefresh)
@@ -176,7 +183,6 @@ class AppController extends GetxController
   Future<void> getFolderList () async
   {
 
-
     var bodyMap = {"id":"0","_csrf":crfToken};
     String? respose = await WebUtils.makePostRequest(STREAMTAPE_FILE_API_URL,bodyMap,headers: {"Cookie":currentCookie});
     streamTapeFolder = StreamTapeFolder.fromJson(jsonDecode(respose));
@@ -208,18 +214,28 @@ class AppController extends GetxController
 
   }
 
-  Future<bool> deleteRemoteUploadVideo (String id,) async
+  Future<void> deleteRemoteUploadVideo (String id,) async
   {
-    var bodyMap = {"id":id,"_csrf":crfToken};
-    String? respose = await WebUtils.makePostRequest(STREAMTAPE_REMOTE_UPLOAD_API_URL,bodyMap,headers: {"Cookie":currentCookie});
-    Map<String,dynamic> jsonMap = jsonDecode(respose);
-    if(jsonMap["statusCode"] == 200)
-    {
-      return true;
-    }
-    else
-    {
-      return false;
+    LoaderDialog.showLoaderDialog(Get.context!,text: "Deleting......");
+    try {
+      var bodyMap = {"id":id,"_csrf":crfToken};
+      String? respose = await WebUtils.makePostRequest(STREAMTAPE_DELETE_API_URL,bodyMap,headers: {"Cookie":currentCookie});
+      Map<String,dynamic> jsonMap = jsonDecode(respose);
+      if(jsonMap["statusCode"] == 200)
+          {
+            LoaderDialog.stopLoaderDialog();
+            showToast("Deleted Successfully.....");
+            await getDownloadingVideoStatus(isSync: true);
+
+          }
+          else
+          {
+            LoaderDialog.stopLoaderDialog();
+            showToast("Unable to delete.....");
+          }
+    } catch (e) {
+      LoaderDialog.stopLoaderDialog();
+      showToast("exception:" + e.toString());
     }
 
   }
@@ -243,7 +259,6 @@ class AppController extends GetxController
 
     showToast("Fetching Kuaishou Flv Url .....");
     String? orginalUrl = await WebUtils.getOriginalUrl(kuaishouLink);
-    showToast("Kwai Link : " + orginalUrl!,isDurationLong: true);
     WebViewUtils webViewUtils = WebViewUtils();
     String flvurl = await webViewUtils.getUrlWithWebView(orginalUrl!, ".flv");
     await webViewUtils.disposeWebView();
@@ -268,48 +283,93 @@ class AppController extends GetxController
       }
 
     LoaderDialog.stopLoaderDialog();
+    if (logText.contains("captcha")) {
+      showmodalBottomSheet(Get.context!, logText);
+    }
   }
 
-  Future getDownloadingVideoStatus({bool isFromSubmit = false}) async
+  Future getDownloadingVideoStatus({bool isSync = false}) async
   {
     isDownloadStatusUpdating.value = true;
     downloadingCompleter = Completer();
     try {
-      if (!isFromSubmit) {
+      if (!isSync) {
         downloadingList.clear();
       }
       this.update(["updateDownloadingList"]);
       String? response = await WebUtils.makeGetRequest(STREAMTAPE_DOWNLOADING_STATUS_API_URL,headers: {"Cookie":currentCookie});
       Map<String,dynamic> jsonMap = jsonDecode(response!);
       List<dynamic> list = (jsonMap["data"] as List<dynamic>);
-      if (!isFromSubmit) {
+      if (!isSync) {
         for (dynamic item in list)
              {
                Uint8List? bytes;
-               if (item["status"] != "error") {
-                  bytes = await VideoCaptureUtils().captureImage(item["url"], 500);
+               Uint8List bytesBox = getDownloadingLinkId(item["id"]);
+               if (item["status"] != "error" ) {
+                 if (bytesBox== null || bytesBox.isEmpty) {
+                         bytes = await VideoCaptureUtils().captureImage(item["url"], 500);
+                         setDownloadingLinkId(item["id"], bytes);
+                      }
+                 else
+                   {
+                     bytes = getDownloadingLinkId(item["id"]);
+                   }
                }
                downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"]));
 
               this.update(["updateDownloadingList"]);
 
              }
+        await deleteAllExcept(downloadingListIdBox, downloadingList.map((value) => value.id).toList());
       } else {
-        for (dynamic item in list)
-          {
-            tempdownloadingList.clear();
-            bool isExist = downloadingList.any((value) => value.id == item["id"]);
-            if(!isExist)
-              {
-                Uint8List? bytes;
-                if (item["status"] != "error") {
-                  bytes = await VideoCaptureUtils().captureImage(item["url"], 500);
-                }
-                downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"]));
 
-                this.update(["updateDownloadingList"]);
-              }
-          }
+        // For removing links
+        //if (downloadingList.length > list.length) {
+          tempdownloadingList.clear();
+          for(StreamtapeDownloadStatus item in downloadingList)
+             {
+               bool isExist = list.any((value) => value["id"] == item.id );
+               if(!isExist)
+                 {
+                   tempdownloadingList.add(item);
+                 }
+
+             }
+          for (StreamtapeDownloadStatus item in tempdownloadingList)
+            {
+              downloadingList.remove(item);
+            }
+
+          this.update(["updateDownloadingList"]);
+       // }
+
+        // For adding downloading links
+       // if (downloadingList.length < list.length) {
+          for (dynamic item in list)
+            {
+              tempdownloadingList.clear();
+              bool isExist = downloadingList.any((value) => value.id == item["id"]);
+              if(!isExist)
+                {
+                  Uint8List? bytes;
+                  Uint8List bytesBox = getDownloadingLinkId(item["id"]);
+                  if (item["status"] != "error" ) {
+                    if (bytesBox== null || bytesBox.isEmpty) {
+                      bytes = await VideoCaptureUtils().captureImage(item["url"], 500);
+                      setDownloadingLinkId(item["id"], bytes);
+                    }
+                    else
+                    {
+                      bytes = getDownloadingLinkId(item["id"]);
+                    }
+                  }
+                  downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"]));
+
+                  this.update(["updateDownloadingList"]);
+                  await scrollToEnd();
+                }
+            }
+       // }
       }
     } catch (e) {
       // isDownloadStatusUpdating.value = false;
@@ -318,6 +378,12 @@ class AppController extends GetxController
     }
     isDownloadStatusUpdating.value = false;
     downloadingCompleter.complete();
+  }
+
+  Future<void> updateVideoThumbnail(StreamtapeDownloadStatus streamtapeDownloadStatus) async
+  {
+    streamtapeDownloadStatus.imageBytes = await VideoCaptureUtils().captureImage(streamtapeDownloadStatus.url!, 500);
+    this.update(["updateDownloadingList"]);
   }
 
   bool isUrlExistsInDownlodingList (String url)
@@ -330,7 +396,7 @@ class AppController extends GetxController
         String downloadUrl = downloadingUri.origin + downloadingUri.path;
         if(downloadUrl == currentUrl && streamtapeDownloadStatus.status == "downloading")
         {
-          showToast("Url alread exists ($url)",isDurationLong: true);
+          showToast("Url already exists ($url)",isDurationLong: true);
           return true;
         }
       }
@@ -347,6 +413,46 @@ class AppController extends GetxController
         backgroundColor: Colors.blue,
         textColor: Colors.white,
         fontSize: 16.0
+    );
+  }
+  
+  void setDownloadingLinkId (String id,Uint8List? value)
+  {
+    downloadingListIdBox.put(id, value);
+  }
+
+  Uint8List getDownloadingLinkId (String id)
+  {
+    return downloadingListIdBox.get(id,defaultValue: Uint8List.fromList([]));
+  }
+
+  Future<void> deleteAllExcept(Box box, List<String?> keysToKeep) async {
+    // Get all keys in the box
+    final allKeys = box.keys;
+
+    // Iterate over all keys and delete those not in keysToKeep
+    for (var key in allKeys) {
+      if (!keysToKeep.contains(key)) {
+        await box.delete(key);
+      }
+    }
+  }
+
+  Future<void> scrollToEnd() async {
+    await Future.delayed(Duration(milliseconds: 1500));
+    await scrollController.animateTo(
+      scrollController.position.maxScrollExtent,
+      duration: Duration(milliseconds: 500),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void showmodalBottomSheet(BuildContext contxt,String value ) {
+    showModalBottomSheet(
+      context: contxt,
+      builder: (context) {
+        return SingleChildScrollView(child: Text(value),);
+      }
     );
   }
   // Future<Uint8List?> captureImage(String url,int seekPosition) async {

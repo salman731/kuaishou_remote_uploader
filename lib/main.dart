@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:hive/hive.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
 import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
 import 'package:kuaishou_remote_uploader/dialogs/video_player_dialog.dart';
@@ -12,9 +13,13 @@ import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
 import 'package:kuaishou_remote_uploader/widgets/custom_button.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sizer/sizer.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final appDocumentDirectory = await getApplicationDocumentsDirectory();
+  Hive.init(appDocumentDirectory.path);
   runApp( MyApp());
 }
 
@@ -118,108 +123,90 @@ class _MyHomePageState extends State<MyHomePage> {
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
+        actions: <Widget>[
+          PopupMenuButton<String>(
+            onSelected: (item) async {
+              switch(item)
+                  {
+                case "refresh":
+                  await reauthenticate();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
+            ],
+          ),
+        ],
       ),
       body: SingleChildScrollView(
-        child: RefreshIndicator(
-          onRefresh: reauthenticate,
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child:Obx(()=>appController.isLoading.value
-                ? Center(child: CircularProgressIndicator()) : Center(
-              // Center is a layout widget. It takes a single child and positions it
-              // in the middle of the parent.
-              child: Column(
-                // Column is also a layout widget. It takes a list of children and
-                // arranges them vertically. By default, it sizes itself to fit its
-                // children horizontally, and tries to be as tall as its parent.
-                //
-                // Column has various properties to control how it sizes itself and
-                // how it positions its children. Here we use mainAxisAlignment to
-                // center the children vertically; the main axis here is the vertical
-                // axis because Columns are vertical (the cross axis would be
-                // horizontal).
-                //
-                // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-                // action in the IDE, or press "p" in the console), to see the
-                // wireframe for each widget.
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child:Obx(()=>appController.isLoading.value
+              ? Center(child: CircularProgressIndicator()) : Center(
+            // Center is a layout widget. It takes a single child and positions it
+            // in the middle of the parent.
+            child: Column(
+              // Column is also a layout widget. It takes a list of children and
+              // arranges them vertically. By default, it sizes itself to fit its
+              // children horizontally, and tries to be as tall as its parent.
+              //
+              // Column has various properties to control how it sizes itself and
+              // how it positions its children. Here we use mainAxisAlignment to
+              // center the children vertically; the main axis here is the vertical
+              // axis because Columns are vertical (the cross axis would be
+              // horizontal).
+              //
+              // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
+              // action in the IDE, or press "p" in the console), to see the
+              // wireframe for each widget.
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
 
-                    Container(
-                    padding: EdgeInsets.all(8.0),
-                    decoration: BoxDecoration(// Background color
-                      borderRadius: BorderRadius.circular(5.0),
-                      border: Border.all(
-                        color: Colors.black, // Border color
-                        width: 2.0,
-                      ),
-                    ), //     <-- TextField expands to this height.
-                    child: TextField(
-                      controller: appController.folderTextEditingController,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        suffixIcon: IconButton(
-                          onPressed: () async {
-                            bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
-                            if(!isFolderExists)
-                              {
-                                LoaderDialog.showLoaderDialog(context);
-                                bool isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
-                                if(isFolderCreated)
-                                  {
-                                    await appController.getFolderList();
-                                    appController.showToast("Folder Created Successfully");
-                                  }
-                                else
-                                  {
-                                    appController.showToast("There is error while creating folder");
-                                  }
-                                LoaderDialog.stopLoaderDialog();
-                              }
-                            else
-                              {
-                                appController.showToast("Folder already exists");
-                              }
-
-                          },
-                          icon: Icon(Icons.create_new_folder),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 10,),
-                  Obx(()=>Center(
-                    child: Container(
-                      padding: EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(// Background color
-                        borderRadius: BorderRadius.circular(5.0),
-                        border: Border.all(
-                          color: Colors.black, // Border color
-                          width: 2.0,
-                        ),
-                      ),
-                      child: DropdownButton<StreamTapeFolderItem>(
-                        value: appController.selectedFolder.value,
-                        //iconEnabledColor: AppColors.red,
-                        isExpanded: true,
-                        onChanged: ( newValue) {
-                          appController.selectedFolder.value = newValue!;
-                          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, newValue.name!);
-                        },
-                        items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
-                          return DropdownMenuItem<StreamTapeFolderItem>(
-                            value: value,
-                            child: Text("${value.name}"),
-                          );
-                        }).toList(),
-                        //dropdownColor: Colors.black, // Dropdown background color
-                        underline: SizedBox(), // Remove default underline
-                      ),
-                    ),
-                  ),
-                  ),
-                  SizedBox(height: 10,),
                   Container(
+                  padding: EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(// Background color
+                    borderRadius: BorderRadius.circular(5.0),
+                    border: Border.all(
+                      color: Colors.black, // Border color
+                      width: 2.0,
+                    ),
+                  ), //     <-- TextField expands to this height.
+                  child: TextField(
+                    controller: appController.folderTextEditingController,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      suffixIcon: IconButton(
+                        onPressed: () async {
+                          bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
+                          if(!isFolderExists)
+                            {
+                              LoaderDialog.showLoaderDialog(context);
+                              bool isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
+                              if(isFolderCreated)
+                                {
+                                  await appController.getFolderList();
+                                  appController.showToast("Folder Created Successfully");
+                                }
+                              else
+                                {
+                                  appController.showToast("There is error while creating folder");
+                                }
+                              LoaderDialog.stopLoaderDialog();
+                            }
+                          else
+                            {
+                              appController.showToast("Folder already exists");
+                            }
+
+                        },
+                        icon: Icon(Icons.create_new_folder),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 10,),
+                Obx(()=>Center(
+                  child: Container(
                     padding: EdgeInsets.all(8.0),
                     decoration: BoxDecoration(// Background color
                       borderRadius: BorderRadius.circular(5.0),
@@ -228,103 +215,136 @@ class _MyHomePageState extends State<MyHomePage> {
                         width: 2.0,
                       ),
                     ),
-                    height: 150, //     <-- TextField expands to this height.
-                    child: TextField(
-                      controller: appController.urlTextEditingController,
-                      maxLines: null, // Set this
-                      expands: true, // and this
-                      keyboardType: TextInputType.multiline,
-                      decoration: InputDecoration(border: InputBorder.none,),
-                      onChanged: (value){
-                        if(value.length - previousTextFieldTxt!.length > 1)
-                          {
-                            appController.urlTextEditingController.text = value + "\n";
-                            previousTextFieldTxt = value + "\n";
-                            return;
-                          }
-                        previousTextFieldTxt = value;
+                    child: DropdownButton<StreamTapeFolderItem>(
+                      value: appController.selectedFolder.value,
+                      //iconEnabledColor: AppColors.red,
+                      isExpanded: true,
+                      onChanged: ( newValue) {
+                        appController.selectedFolder.value = newValue!;
+                        SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, newValue.name!);
                       },
+                      items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                        return DropdownMenuItem<StreamTapeFolderItem>(
+                          value: value,
+                          child: Text("${value.name}"),
+                        );
+                      }).toList(),
+                      //dropdownColor: Colors.black, // Dropdown background color
+                      underline: SizedBox(), // Remove default underline
                     ),
                   ),
-                  SizedBox(height: 10,),
-                  GetBuilder<AppController>(
-                    id: "updateDownloadingList",
-                    builder: (_)
-                    {
-                      return Column(
-
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
-                                SizedBox(width: 10,),
-                                Obx(()=>appController.isDownloadStatusUpdating.value ? Center(child: SizedBox(height: 36,width: 36, child: CircularProgressIndicator()),)  :IconButton(
-                                  onPressed: () async {
-                                      await appController.getDownloadingVideoStatus();
-                                    }, icon: Icon(Icons.refresh),iconSize: 36,))
-                          ],),
-
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            height: 300,
-                            child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: appController.downloadingList.length,
-                                itemBuilder: (context,index){
-
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    child: Row(
-                                      children: [
-                                        Text((index+1).toString(),style:TextStyle(fontSize: 15,color: getTextColor(appController.downloadingList[index]!.status!) )),
-                                        SizedBox(width: 5,),
-                                        GetBuilder<AppController>(
-                                          id : "updateVideoThumbnail",
-                                          builder: (_) {
-                                            return InkWell(
-                                              onTap: () async {
-                                                await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
-                                              },
-                                              child: SizedBox(
-                                                height: 150,
-                                                width: 100,
-                                                child: appController.downloadingList[index]!.imageBytes == null ? Text("No Image Found") : Image.memory(appController.downloadingList[index]!.imageBytes!,)
-
-
-                                              ),
-                                            );
-                                          },
-
-                                        ),
-                                        Expanded(child: Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
-                                        )),
-                                        IconButton(onPressed: () async {
-                                          await appController.deleteRemoteUploadVideo(appController.downloadingList[index]!.id!);
-                                        }, icon: Icon(Icons.delete),iconSize: 24,)
-                                      ],
-                                    ),
-                                  );
-                                  // return ListTile(onTap: () async {
-                                  //   await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
-                                  // },
-                                  //  leading: Text((index+1).toString(),style:TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) )),
-                                  //  title: Padding(
-                                  //  padding: const EdgeInsets.all(8.0),
-                                  //  child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
-                                  // ));
-                                }),
-                          )
-                        ],
-                      );
+                ),
+                ),
+                SizedBox(height: 10,),
+                Container(
+                  padding: EdgeInsets.all(8.0),
+                  decoration: BoxDecoration(// Background color
+                    borderRadius: BorderRadius.circular(5.0),
+                    border: Border.all(
+                      color: Colors.black, // Border color
+                      width: 2.0,
+                    ),
+                  ),
+                  height: 150, //     <-- TextField expands to this height.
+                  child: TextField(
+                    controller: appController.urlTextEditingController,
+                    maxLines: null, // Set this
+                    expands: true, // and this
+                    keyboardType: TextInputType.multiline,
+                    decoration: InputDecoration(border: InputBorder.none,),
+                    onChanged: (value){
+                      if(value.length - previousTextFieldTxt!.length > 1)
+                        {
+                          appController.urlTextEditingController.text = value + "\n";
+                          previousTextFieldTxt = value + "\n";
+                          return;
+                        }
+                      previousTextFieldTxt = value;
                     },
                   ),
-                ],
-              ),
-            ))
-          ),
+                ),
+                SizedBox(height: 10,),
+                GetBuilder<AppController>(
+                  id: "updateDownloadingList",
+                  builder: (_)
+                  {
+                    return Column(
+
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
+                              SizedBox(width: 10,),
+                              Obx(()=>appController.isDownloadStatusUpdating.value ? Center(child: SizedBox(height: 36,width: 36, child: CircularProgressIndicator()),)  :IconButton(
+                                onPressed: () async {
+                                    await appController.getDownloadingVideoStatus();
+                                  }, icon: Icon(Icons.refresh),iconSize: 36,))
+                        ],),
+
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          height: 300,
+                          child: ListView.builder(
+                              shrinkWrap: true,
+                              controller: appController.scrollController,
+                              itemCount: appController.downloadingList.length,
+                              itemBuilder: (context,index){
+
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      Text((index+1).toString(),style:TextStyle(fontSize: 15,color: getTextColor(appController.downloadingList[index]!.status!) )),
+                                      SizedBox(width: 5,),
+                                      GetBuilder<AppController>(
+                                        id : "updateVideoThumbnail",
+                                        builder: (_) {
+                                          return InkWell(
+                                            onTap: () async {
+                                              await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                                            },
+                                            child: SizedBox(
+                                              height: 150,
+                                              width: 100,
+                                              child: appController.downloadingList[index]!.imageBytes == null ? Text("No Image Found") : Image.memory(appController.downloadingList[index]!.imageBytes!,)
+
+
+                                            ),
+                                          );
+                                        },
+
+                                      ),
+                                      Expanded(child: Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
+                                      )),
+                                      IconButton(onPressed: () async {
+                                        await appController.updateVideoThumbnail(appController.downloadingList[index]);
+                                      }, icon: Icon(Icons.refresh),iconSize: 24,),
+                                      IconButton(onPressed: () async {
+                                        await appController.deleteRemoteUploadVideo(appController.downloadingList[index]!.id!);
+                                      }, icon: Icon(Icons.delete),iconSize: 24,),
+                                    ],
+                                  ),
+                                );
+                                // return ListTile(onTap: () async {
+                                //   await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                                // },
+                                //  leading: Text((index+1).toString(),style:TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) )),
+                                //  title: Padding(
+                                //  padding: const EdgeInsets.all(8.0),
+                                //  child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
+                                // ));
+                              }),
+                        )
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ))
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -333,7 +353,7 @@ class _MyHomePageState extends State<MyHomePage> {
            await Future.delayed(Duration(seconds: 1));
            //if (!appController.isDownloadStatusUpdating.value) {
            await appController.downloadingCompleter.future;
-           await appController.getDownloadingVideoStatus(isFromSubmit: true);
+           await appController.getDownloadingVideoStatus(isSync: true);
            //}
            appController.urlTextEditingController.clear();
            previousTextFieldTxt = "";
