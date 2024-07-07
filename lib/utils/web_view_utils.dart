@@ -37,7 +37,7 @@ class WebViewUtils
       initialSettings: InAppWebViewSettings(isInspectable: false,useShouldInterceptRequest: true,useShouldOverrideUrlLoading: true,/*userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"*/),
       shouldInterceptRequest: (controller,request) async
         {
-          Get.find<AppController>().logText  += "shouldInterceptRequest: ${request.toString()}\n";
+          Get.find<AppController>().logText  += "url: ${request.url.origin}\n";
           if(request.url.rawValue.contains(urlExtension))
             {
               if(finalUrl!.isEmpty)

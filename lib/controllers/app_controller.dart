@@ -76,10 +76,10 @@ class AppController extends GetxController
     downloadingListIdBox = await Hive.openBox("downloadingListId");
     String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
     String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
-    if(isRefresh)
-      {
+    // if(isRefresh)
+    //   {
         await CookieManager.instance().deleteAllCookies();
-      }
+     // }
     if( ((cookie == null || cookie.isEmpty) && (csrf == null || csrf.isEmpty)) || isRefresh)
       {
         headlessInAppWebView = HeadlessInAppWebView(
@@ -394,7 +394,7 @@ class AppController extends GetxController
       {
         Uri downloadingUri = Uri.parse(streamtapeDownloadStatus.url!);
         String downloadUrl = downloadingUri.origin + downloadingUri.path;
-        if(downloadUrl == currentUrl && streamtapeDownloadStatus.status == "downloading")
+        if(downloadUrl == currentUrl)
         {
           showToast("Url already exists ($url)",isDurationLong: true);
           return true;
@@ -439,7 +439,7 @@ class AppController extends GetxController
   }
 
   Future<void> scrollToEnd() async {
-    await Future.delayed(Duration(milliseconds: 1500));
+    await Future.delayed(Duration(milliseconds: 1000));
     await scrollController.animateTo(
       scrollController.position.maxScrollExtent,
       duration: Duration(milliseconds: 500),
