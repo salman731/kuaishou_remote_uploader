@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:butterfly_dialog/butterfly_dialog.dart';
 import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter/return_code.dart';
@@ -229,12 +230,18 @@ class AppController extends GetxController
 
   Future<void> deleteRemoteUploadVideo (String id,) async
   {
-    LoaderDialog.showLoaderDialog(Get.context!,text: "Deleting......");
-    try {
-      var bodyMap = {"id":id,"_csrf":crfToken};
-      String? respose = await WebUtils.makePostRequest(STREAMTAPE_DELETE_API_URL,bodyMap,headers: {"Cookie":currentCookie});
-      Map<String,dynamic> jsonMap = jsonDecode(respose);
-      if(jsonMap["statusCode"] == 200)
+    ButterflyAlertDialog.show(
+      context: Get.context!,
+      title: 'Delete',
+      subtitle: 'Are sure you want to delete it?',
+      alertType: AlertType.delete,
+      onConfirm: () async {
+        LoaderDialog.showLoaderDialog(Get.context!,text: "Deleting......");
+        try {
+          var bodyMap = {"id":id,"_csrf":crfToken};
+          String? respose = await WebUtils.makePostRequest(STREAMTAPE_DELETE_API_URL,bodyMap,headers: {"Cookie":currentCookie});
+          Map<String,dynamic> jsonMap = jsonDecode(respose);
+          if(jsonMap["statusCode"] == 200)
           {
             LoaderDialog.stopLoaderDialog();
             showToast("Deleted Successfully.....");
@@ -251,10 +258,13 @@ class AppController extends GetxController
             LoaderDialog.stopLoaderDialog();
             showToast("Unable to delete.....");
           }
-    } catch (e) {
-      LoaderDialog.stopLoaderDialog();
-      showToast("exception:" + e.toString());
-    }
+        } catch (e) {
+          LoaderDialog.stopLoaderDialog();
+          showToast("exception:" + e.toString());
+        }
+      },
+    );
+
 
   }
 
@@ -388,6 +398,9 @@ class AppController extends GetxController
       String? response = await WebUtils.makeGetRequest(STREAMTAPE_DOWNLOADING_STATUS_API_URL,headers: {"Cookie":currentCookie});
       Map<String,dynamic> jsonMap = jsonDecode(response!);
       List<dynamic> list = (jsonMap["data"] as List<dynamic>);
+      if (list.isEmpty) {
+        showToast("List is empty from streamtape\n Response :" + response,isError: true);
+      }
       if (!isSync) {
         for (dynamic item in list)
              {
@@ -587,14 +600,14 @@ class AppController extends GetxController
     return finalUrls;
   }
 
-  showToast (String text,{bool isDurationLong = false})
+  showToast (String text,{bool isDurationLong = false, bool isError = false})
   {
     Fluttertoast.showToast(
         msg: text,
         toastLength: isDurationLong ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
         timeInSecForIosWeb: 1,
-        backgroundColor: Colors.blue,
+        backgroundColor: isError ? Colors.red :Colors.blue,
         textColor: Colors.white,
         fontSize: 16.0
     );

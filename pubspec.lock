@@ -105,6 +105,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "8.9.2"
+  butterfly_dialog:
+    dependency: "direct main"
+    description:
+      name: butterfly_dialog
+      sha256: "0c2bbd60a3177cd996de64e75b71dee2fba5612c2c49fbaea245950c1fede524"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.3"
   characters:
     dependency: transitive
     description:
