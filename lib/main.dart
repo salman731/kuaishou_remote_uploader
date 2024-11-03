@@ -134,7 +134,34 @@ class _MyHomePageState extends State<MyHomePage> {
             },
             itemBuilder: (context) => [
               PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
+              PopupMenuItem(
+                child: Obx(()=> CheckboxListTile(
+                  activeColor: Colors.blue,
+                  value: appController.isConcurrentProcessing.value,
+                  onChanged: (value){
+                    appController.isConcurrentProcessing.value = !appController.isConcurrentProcessing.value;
+                    SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS, appController.isConcurrentProcessing.value);
+                  },
+                  title: Text("Enable Concurrent Processing"),
+                ),
+
+                ),
+              ),
+              PopupMenuItem(
+                child: Obx(()=> CheckboxListTile(
+                  activeColor: Colors.blue,
+                  value: appController.isWebPageProcessing.value,
+                  onChanged: (value){
+                    appController.isWebPageProcessing.value = !appController.isWebPageProcessing.value;
+                    SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, appController.isWebPageProcessing.value);
+                  },
+                  title: Text("Enable Web Page Processing"),
+                ),
+
+                ),
+              ),
             ],
+
           ),
         ],
       ),
@@ -253,6 +280,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     keyboardType: TextInputType.multiline,
                     decoration: InputDecoration(border: InputBorder.none,),
                     onChanged: (value){
+                      // Move cursor to next line when url is pasted;
                       if(value.length - previousTextFieldTxt!.length > 1)
                         {
                           appController.urlTextEditingController.text = value + "\n";
@@ -278,7 +306,11 @@ class _MyHomePageState extends State<MyHomePage> {
                               SizedBox(width: 10,),
                               Obx(()=>appController.isDownloadStatusUpdating.value ? Center(child: SizedBox(height: 36,width: 36, child: CircularProgressIndicator()),)  :IconButton(
                                 onPressed: () async {
-                                    await appController.getDownloadingVideoStatus();
+                                    if (!appController.isConcurrentProcessing.value) {
+                                      await appController.getDownloadingVideoStatus();
+                                    } else {
+                                      await appController.getConcurrentDownloadingVideoStatus();
+                                    }
                                   }, icon: Icon(Icons.refresh),iconSize: 36,))
                         ],),
 
@@ -308,8 +340,6 @@ class _MyHomePageState extends State<MyHomePage> {
                                               height: 150,
                                               width: 100,
                                               child: appController.downloadingList[index]!.imageBytes == null ? Text("No Image Found") : Image.memory(appController.downloadingList[index]!.imageBytes!,)
-
-
                                             ),
                                           );
                                         },
@@ -319,9 +349,12 @@ class _MyHomePageState extends State<MyHomePage> {
                                         padding: const EdgeInsets.all(8.0),
                                         child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
                                       )),
-                                      IconButton(onPressed: () async {
-                                        await appController.updateVideoThumbnail(appController.downloadingList[index]);
-                                      }, icon: Icon(Icons.refresh),iconSize: 24,),
+                                      Obx( ()=> !appController.downloadingList[index].isThumbnailUpdating!.value ? IconButton(onPressed: () async {
+                                        appController.downloadingList[index].isThumbnailUpdating!.value = true;
+                                          await appController.updateVideoThumbnail(appController.downloadingList[index]);
+                                        appController.downloadingList[index].isThumbnailUpdating!.value = false;
+                                        }, icon: Icon(Icons.refresh),iconSize: 24,) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,))
+                                      ),
                                       IconButton(onPressed: () async {
                                         await appController.deleteRemoteUploadVideo(appController.downloadingList[index]!.id!);
                                       }, icon: Icon(Icons.delete),iconSize: 24,),
@@ -349,11 +382,22 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async  {
-           await appController.startUploading(appController.urlTextEditingController.text);
+           if(appController.isConcurrentProcessing.value)
+             {
+               await appController.concurrentStartUploading(appController.urlTextEditingController.text);
+             }
+           else
+             {
+               await appController.startUploading(appController.urlTextEditingController.text);
+             }
            await Future.delayed(Duration(seconds: 1));
            //if (!appController.isDownloadStatusUpdating.value) {
            await appController.downloadingCompleter.future;
-           await appController.getDownloadingVideoStatus(isSync: true);
+           if (!appController.isConcurrentProcessing.value) {
+             await appController.getDownloadingVideoStatus(isSync: true);
+           } else {
+             await appController.getConcurrentDownloadingVideoStatus(isSync: true);
+           }
            //}
            appController.urlTextEditingController.clear();
            previousTextFieldTxt = "";

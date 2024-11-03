@@ -37,6 +37,7 @@ class AppController extends GetxController
   String STREAMTAPE_DOWNLOADING_STATUS_API_URL = "https://streamtape.com/api/website/remotedl/get";
   String STREAMTAPE_NEW_FOLDER_API_URL = "https://streamtape.com/api/website/filemanager/folder/put";
   String STREAMTAPE_DELETE_API_URL = "https://streamtape.com/api/website/remotedl/del";
+  String KOUAISHOU_LIVE_API_URL = "https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
 
   HeadlessInAppWebView? headlessInAppWebView;
   InAppWebViewController? inAppWebViewController;
@@ -59,6 +60,8 @@ class AppController extends GetxController
   ScrollController scrollController = ScrollController();
 
   String logText = "";
+  RxBool isConcurrentProcessing = false.obs;
+  RxBool isWebPageProcessing = false.obs;
 
   /* initTimer()
   {
@@ -73,6 +76,8 @@ class AppController extends GetxController
   {
     //CookieManager.instance().deleteAllCookies();
     await SharedPrefsUtil.initSharedPreference();
+    isConcurrentProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS);
+    isWebPageProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS);
     downloadingListIdBox = await Hive.openBox("downloadingListId");
     String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
     String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
@@ -133,7 +138,11 @@ class AppController extends GetxController
               //initTimer();
               isLoading.value = false;
               showToast("Webpage Loading Completed .....");
-              await getDownloadingVideoStatus();
+              if (!isConcurrentProcessing.value) {
+                await getDownloadingVideoStatus();
+              } else {
+                await getConcurrentDownloadingVideoStatus();
+              }
               return;
             }
             // Click on login or account panel
@@ -175,7 +184,11 @@ class AppController extends GetxController
         await getFolderList();
         //initTimer();
         isLoading.value = false;
-        await getDownloadingVideoStatus();
+        if (!isConcurrentProcessing.value) {
+          await getDownloadingVideoStatus();
+        } else {
+          await getConcurrentDownloadingVideoStatus();
+        }
       }
   }
 
@@ -225,7 +238,12 @@ class AppController extends GetxController
           {
             LoaderDialog.stopLoaderDialog();
             showToast("Deleted Successfully.....");
-            await getDownloadingVideoStatus(isSync: true);
+            if (!isConcurrentProcessing.value) {
+              await getDownloadingVideoStatus(isSync: true);
+            } else {
+              await getConcurrentDownloadingVideoStatus(isSync: true);
+            }
+
 
           }
           else
@@ -243,10 +261,16 @@ class AppController extends GetxController
   Future<bool> remoteUploadStreamTape (String url,String folder) async
   {
     try {
-      showToast("Uploading to Streamtape .....");
+
+      if (!isConcurrentProcessing.value) {
+        showToast("Uploading to Streamtape .....");
+      }
       var bodyMap = {"links":url,"headers":"","folder":folder,"_csrf":crfToken};
       String? response = await WebUtils.makePostRequest(STREAMTAPE_REMOTE_UPLOAD_API_URL, bodyMap,headers: {"Cookie":currentCookie});
       Map<String,dynamic> json = jsonDecode(response);
+      if (isConcurrentProcessing.value) {
+        await Future.delayed(Duration(seconds: 1));
+      }
       return json["statusCode"] == 200;
     } catch (e) {
       print(e);
@@ -254,15 +278,36 @@ class AppController extends GetxController
     }
   }
 
-  Future<String?> getFlvUrlfromKuaihsouLink (String kuaishouLink) async
+  Future<String> getFlvUrlfromKuaihsouLink (String kuaishouLink) async
   {
 
-    showToast("Fetching Kuaishou Flv Url .....");
+    if (!isConcurrentProcessing.value) {
+      showToast("Fetching Kuaishou Flv Url .....");
+    }
     String? orginalUrl = await WebUtils.getOriginalUrl(kuaishouLink);
     WebViewUtils webViewUtils = WebViewUtils();
     String flvurl = await webViewUtils.getUrlWithWebView(orginalUrl!, ".flv");
     await webViewUtils.disposeWebView();
+    if (isConcurrentProcessing.value) {
+      await Future.delayed(Duration(seconds: 1));
+    }
     return flvurl;
+  }
+
+  Future<String> getDirectKuaishouFlvUrl (String kuaishouLink) async
+  {
+     String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink);
+     Uri orginalUri = Uri.parse(orginalLink!);
+     String? eid = orginalUri.path.split("/").last;
+     String? efid = orginalUri.queryParameters["efid"];
+     var requestMap = {"efid":efid,"eid":eid,"source":6,"shareMethod":"card","clientType":"WEB_OUTSIDE_SHARE_H5"};
+     var headers = {"Referer":orginalLink,"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36","Content-Type":"application/json","Accept-Encoding":"gzip, deflate, br","Accept":"*/*"};
+     String response = await WebUtils.makePostRequest(KOUAISHOU_LIVE_API_URL, jsonEncode(requestMap),headers: headers);
+     Map<String,dynamic> jsonResponse = json.decode(response);
+     String finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"];
+     return finalFlvUrl;
+
+
   }
 
   Future startUploading (String links) async
@@ -270,11 +315,14 @@ class AppController extends GetxController
     LoaderDialog.showLoaderDialog(Get.context!,text: "Uploading......");
     List<String> urls = links.split("\n");
     urls.removeWhere((value) => value.isEmpty);
+    Set<String> uniquePaths = {};
     for (String url in urls)
       {
          if (url.isNotEmpty) {
            String? flvUrl = await getFlvUrlfromKuaihsouLink(url);
-           if(flvUrl!.isNotEmpty && !isUrlExistsInDownlodingList(flvUrl))
+           Uri uri = Uri.parse(flvUrl);
+           String currentUrl = uri.origin + uri.path;
+           if(flvUrl!.isNotEmpty && !isUrlExistsInDownlodingList(flvUrl) && uniquePaths.add(currentUrl))
              {
                await remoteUploadStreamTape(flvUrl!, selectedFolder.value.id!);
              }
@@ -282,6 +330,46 @@ class AppController extends GetxController
          await Future.delayed(Duration(seconds: 3));
       }
 
+    LoaderDialog.stopLoaderDialog();
+    if (logText.contains("captcha")) {
+      showmodalBottomSheet(Get.context!, logText);
+    }
+  }
+
+
+  Future concurrentStartUploading (String links) async
+  {
+    LoaderDialog.showLoaderDialog(Get.context!,text: "Uploading......");
+    List<String> urls = links.split("\n");
+    urls.removeWhere((value) => value.isEmpty);
+    List<Future<String>> flvUrlFutureList= [];
+    List<Future<void>> streamtapeUploadingFutureList = [];
+    List<String> flvUrls = [];
+    showToast("Fetching Kuaishou Flv Url .....");
+    for (String url in urls)
+    {
+      if (url.isNotEmpty) {
+        if(isWebPageProcessing.value)
+          {
+            flvUrlFutureList.add(getDirectKuaishouFlvUrl(url));
+          }
+        else
+          {
+            flvUrlFutureList.add(getFlvUrlfromKuaihsouLink(url));
+          }
+      }
+    }
+    flvUrls = await Future.wait(flvUrlFutureList);
+    List<String> distinctFlvUrlsList = removeDuplicateUrls(flvUrls);
+    showToast("Uploading to Streamtape .....");
+    for(String flvUrl in distinctFlvUrlsList)
+      {
+        if(flvUrl!.isNotEmpty && !isUrlExistsInDownlodingList(flvUrl))
+        {
+           streamtapeUploadingFutureList.add(remoteUploadStreamTape(flvUrl!, selectedFolder.value.id!));
+        }
+      }
+    await Future.wait(streamtapeUploadingFutureList);
     LoaderDialog.stopLoaderDialog();
     if (logText.contains("captcha")) {
       showmodalBottomSheet(Get.context!, logText);
@@ -315,9 +403,9 @@ class AppController extends GetxController
                      bytes = getDownloadingLinkId(item["id"]);
                    }
                }
-               downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"]));
+               downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"],isThumbnailUpdating: false.obs));
 
-              this.update(["updateDownloadingList"]);
+               this.update(["updateDownloadingList"]);
 
              }
         await deleteAllExcept(downloadingListIdBox, downloadingList.map((value) => value.id).toList());
@@ -363,7 +451,7 @@ class AppController extends GetxController
                       bytes = getDownloadingLinkId(item["id"]);
                     }
                   }
-                  downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"]));
+                  downloadingList.add(StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"],isThumbnailUpdating: false.obs));
 
                   this.update(["updateDownloadingList"]);
                   await scrollToEnd();
@@ -380,9 +468,81 @@ class AppController extends GetxController
     downloadingCompleter.complete();
   }
 
+  Future getConcurrentDownloadingVideoStatus({bool isSync = false}) async
+  {
+    isDownloadStatusUpdating.value = true;
+    downloadingCompleter = Completer();
+    try {
+      if (!isSync) {
+        downloadingList.clear();
+      }
+      this.update(["updateDownloadingList"]);
+      String? response = await WebUtils.makeGetRequest(STREAMTAPE_DOWNLOADING_STATUS_API_URL,headers: {"Cookie":currentCookie});
+      Map<String,dynamic> jsonMap = jsonDecode(response!);
+      List<dynamic> list = (jsonMap["data"] as List<dynamic>);
+      List<Future<StreamtapeDownloadStatus>> streamtapeStatusList = [];
+      if (!isSync) {
+        for (dynamic item in list)
+        {
+          streamtapeStatusList.add(getDownloadingDetailItem(item,500));
+        }
+        List<StreamtapeDownloadStatus> downloadingListFuture = await Future.wait(streamtapeStatusList);
+        downloadingList.addAll(downloadingListFuture);
+        this.update(["updateDownloadingList"]);
+        await deleteAllExcept(downloadingListIdBox, downloadingList.map((value) => value.id).toList());
+      } else {
+
+        // For removing links
+        //if (downloadingList.length > list.length) {
+        tempdownloadingList.clear();
+        for(StreamtapeDownloadStatus item in downloadingList)
+        {
+          bool isExist = list.any((value) => value["id"] == item.id );
+          if(!isExist)
+          {
+            tempdownloadingList.add(item);
+          }
+
+        }
+        for (StreamtapeDownloadStatus item in tempdownloadingList)
+        {
+          downloadingList.remove(item);
+        }
+
+        this.update(["updateDownloadingList"]);
+        // }
+
+        // For adding downloading links
+        // if (downloadingList.length < list.length) {
+        for (dynamic item in list)
+        {
+          tempdownloadingList.clear();
+          bool isExist = downloadingList.any((value) => value.id == item["id"]);
+          if(!isExist)
+          {
+            streamtapeStatusList.add(getDownloadingDetailItem(item,500));
+          }
+        }
+        List<StreamtapeDownloadStatus> downloadingListFuture = await Future.wait(streamtapeStatusList);
+        downloadingList.addAll(downloadingListFuture);
+        this.update(["updateDownloadingList"]);
+        await scrollToEnd();
+        // }
+      }
+    } catch (e) {
+      // isDownloadStatusUpdating.value = false;
+      // downloadingCompleter.complete();
+      print(e);
+    }
+    isDownloadStatusUpdating.value = false;
+    downloadingCompleter.complete();
+  }
+
   Future<void> updateVideoThumbnail(StreamtapeDownloadStatus streamtapeDownloadStatus) async
   {
-    streamtapeDownloadStatus.imageBytes = await VideoCaptureUtils().captureImage(streamtapeDownloadStatus.url!, 500);
+    Uint8List? imageBytes = await VideoCaptureUtils().captureImage(streamtapeDownloadStatus.url!, 500);
+    streamtapeDownloadStatus.imageBytes = imageBytes;
+    setDownloadingLinkId(streamtapeDownloadStatus.id!, imageBytes);
     this.update(["updateDownloadingList"]);
   }
 
@@ -401,6 +561,30 @@ class AppController extends GetxController
         }
       }
     return false;
+  }
+
+  List<String> removeDuplicateUrls(List<String> urls) {
+    // Create a set to store unique base URLs (path only)
+    Set<String> uniquePaths = {};
+
+    // Create a list to hold the final unique URLs
+    List<String> finalUrls = [];
+
+    for (var url in urls) {
+      // Parse the URL
+      if (url.isNotEmpty) {
+        Uri uri = Uri.parse(url);
+        // Normalize the URL by getting the path
+        String currentUrl = uri.origin + uri.path;
+
+        // Add to set and list if it's a new path
+        if (uniquePaths.add(currentUrl)) {
+          finalUrls.add(url); // Keep the original URL
+        }
+      }
+    }
+
+    return finalUrls;
   }
 
   showToast (String text,{bool isDurationLong = false})
@@ -455,28 +639,41 @@ class AppController extends GetxController
       }
     );
   }
-  // Future<Uint8List?> captureImage(String url,int seekPosition) async {
-  //   Uint8List imageBytes = Uint8List.fromList([]);
-  //   final directory = await getTemporaryDirectory();
-  //   final String outputPath = '${directory.path}/${Random().nextInt(10000000)}.jpg';
-  //
-  //   String command = '-i $url -ss ${seekPosition / 1000} -vframes 1 $outputPath';
-  //
-  //   FFmpegSession session = await FFmpegKit.execute(command);
-  //   final returnCode = await session.getReturnCode();
-  //
-  //
-  //   if (ReturnCode.isSuccess(returnCode)) {
-  //     File outputFile = File(outputPath);
-  //     imageBytes = await outputFile.readAsBytes();
-  //     if(await outputFile.exists())
-  //       {
-  //         await outputFile.delete();
-  //       }
-  //     return imageBytes;
-  //   } else {
-  //     return null;
-  //   }
-  // }
+
+
+  Future<StreamtapeDownloadStatus> getDownloadingDetailItem(dynamic item,int seekPosition) async {
+      Uint8List? bytes;
+      Uint8List bytesBox = getDownloadingLinkId(item["id"]);
+      if (item["status"] != "error" ) {
+        if (bytesBox== null || bytesBox.isEmpty) {
+          final directory = await getTemporaryDirectory();
+          final String outputPath = '${directory.path}/${Random().nextInt(10000000)}.jpg';
+
+          String command = '-i ${item["url"]} -ss ${seekPosition / 1000} -vframes 1 $outputPath';
+
+          FFmpegSession session = await FFmpegKit.execute(command);
+          final returnCode = await session.getReturnCode();
+
+
+          if (ReturnCode.isSuccess(returnCode)) {
+            File outputFile = File(outputPath);
+            bytes = await outputFile.readAsBytes();
+            setDownloadingLinkId(item["id"], bytes);
+            if(await outputFile.exists())
+            {
+              await outputFile.delete();
+            }
+        }
+      }
+      else
+       {
+         bytes = getDownloadingLinkId(item["id"]);
+       }
+
+    }
+   return StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"],isThumbnailUpdating: false.obs);
+  }
+
+
 
 }

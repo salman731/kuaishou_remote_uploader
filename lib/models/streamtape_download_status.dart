@@ -2,6 +2,8 @@
 
 import 'dart:typed_data';
 
+import 'package:get/get.dart';
+
 class StreamtapeDownloadStatus
 {
   String? status;
@@ -12,6 +14,8 @@ class StreamtapeDownloadStatus
 
   String? id;
 
-  StreamtapeDownloadStatus({this.status,this.url,this.imageBytes,this.id});
+  RxBool? isThumbnailUpdating;
+
+  StreamtapeDownloadStatus({this.status,this.url,this.imageBytes,this.id,this.isThumbnailUpdating});
 
 }
