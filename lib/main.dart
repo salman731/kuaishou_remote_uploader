@@ -10,6 +10,7 @@ import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
 import 'package:kuaishou_remote_uploader/dialogs/video_player_dialog.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
+import 'package:kuaishou_remote_uploader/streamtape_download_screen.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
 import 'package:kuaishou_remote_uploader/widgets/custom_button.dart';
@@ -130,10 +131,13 @@ class _MyHomePageState extends State<MyHomePage> {
                   {
                 case "refresh":
                   await reauthenticate();
+                case "streamtape_downloader":
+                  Get.to(StreamtapeDownloadScreen());
               }
             },
             itemBuilder: (context) => [
               PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
+              PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
               PopupMenuItem(
                 child: Obx(()=> CheckboxListTile(
                   activeColor: Colors.blue,

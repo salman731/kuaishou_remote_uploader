@@ -1,6 +1,7 @@
 
 
 import 'package:json_annotation/json_annotation.dart';
+import 'package:kuaishou_remote_uploader/models/streamtape_file_item.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
 
 part 'streamtape_folder.g.dart';
@@ -10,7 +11,9 @@ class StreamTapeFolder
 {
   List<StreamTapeFolderItem>? folders;
 
-  StreamTapeFolder({this.folders});
+  List<StreamtapeFileItem>? files;
+
+  StreamTapeFolder({this.folders,this.files});
 
   factory StreamTapeFolder.fromJson(Map<String, dynamic> json) => _$StreamTapeFolderFromJson(json);
 

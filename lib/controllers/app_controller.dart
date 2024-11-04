@@ -17,7 +17,9 @@ import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
+import 'package:kuaishou_remote_uploader/models/download_item.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_download_status.dart';
+import 'package:kuaishou_remote_uploader/models/streamtape_file_item.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
@@ -45,6 +47,7 @@ class AppController extends GetxController
   late String currentCookie;
   late String crfToken;
   late Rx<StreamTapeFolderItem> selectedFolder = StreamTapeFolderItem().obs;
+  late Rx<StreamTapeFolderItem> selectedDownloadFolder = StreamTapeFolderItem().obs;
   TextEditingController urlTextEditingController = TextEditingController();
   TextEditingController folderTextEditingController = TextEditingController();
 
@@ -63,6 +66,8 @@ class AppController extends GetxController
   String logText = "";
   RxBool isConcurrentProcessing = false.obs;
   RxBool isWebPageProcessing = false.obs;
+  RxString downloadLinks = "".obs;
+  List<DownloadItem> downloadLinksList = [];
 
   /* initTimer()
   {
@@ -209,8 +214,17 @@ class AppController extends GetxController
       {
         selectedFolder.value = streamTapeFolder!.folders!.first;
       }
+    selectedDownloadFolder.value = streamTapeFolder!.folders!.first;
     //return streamTapeFolder;
   }
+
+  Future<StreamTapeFolder> getFolderFiles(String id) async
+  {
+    var bodyMap = {"id":id,"_csrf":crfToken};
+    String? respose = await WebUtils.makePostRequest(STREAMTAPE_FILE_API_URL,bodyMap,headers: {"Cookie":currentCookie});
+    return StreamTapeFolder.fromJson(jsonDecode(respose));
+  }
+
 
   Future<bool> createFolder (String folderName,{String folderId = "0"}) async
   {
@@ -405,7 +419,7 @@ class AppController extends GetxController
         for (dynamic item in list)
              {
                Uint8List? bytes;
-               Uint8List bytesBox = getDownloadingLinkId(item["id"]);
+               Uint8List? bytesBox = getDownloadingLinkId(item["id"]);
                if (item["status"] != "error" ) {
                  if (bytesBox== null || bytesBox.isEmpty) {
                          bytes = await VideoCaptureUtils().captureImage(item["url"], 500);
@@ -453,7 +467,7 @@ class AppController extends GetxController
               if(!isExist)
                 {
                   Uint8List? bytes;
-                  Uint8List bytesBox = getDownloadingLinkId(item["id"]);
+                  Uint8List? bytesBox = getDownloadingLinkId(item["id"]);
                   if (item["status"] != "error" ) {
                     if (bytesBox== null || bytesBox.isEmpty) {
                       bytes = await VideoCaptureUtils().captureImage(item["url"], 500);
@@ -618,7 +632,7 @@ class AppController extends GetxController
     downloadingListIdBox.put(id, value);
   }
 
-  Uint8List getDownloadingLinkId (String id)
+  Uint8List? getDownloadingLinkId (String id)
   {
     return downloadingListIdBox.get(id,defaultValue: Uint8List.fromList([]));
   }
@@ -656,7 +670,7 @@ class AppController extends GetxController
 
   Future<StreamtapeDownloadStatus> getDownloadingDetailItem(dynamic item,int seekPosition) async {
       Uint8List? bytes;
-      Uint8List bytesBox = getDownloadingLinkId(item["id"]);
+      Uint8List? bytesBox = getDownloadingLinkId(item["id"]);
       if (item["status"] != "error" ) {
         if (bytesBox== null || bytesBox.isEmpty) {
           final directory = await getTemporaryDirectory();
@@ -685,6 +699,65 @@ class AppController extends GetxController
 
     }
    return StreamtapeDownloadStatus(status: item["status"],url: item["url"],imageBytes: bytes,id: item["id"],isThumbnailUpdating: false.obs);
+  }
+
+  Future<String?> getMp4UrlFromStreamTape(String embededUrl,{bool isVideotoEmbededAllowed = false, Map<String,String>? headers}) async
+  {
+    if (isVideotoEmbededAllowed) {
+      embededUrl = embededUrl.replaceAll("/v/", "/e/");
+    }
+    try {
+      dom.Document document = await WebUtils.getDomFromURL_Get(embededUrl,headers: headers);
+      String? ideooLink = document.querySelector("#ideoolink")!.text;
+      List<dom.Element> list = document.querySelectorAll("script");
+      String? javaScript = list[9].text;
+      String? tokenString = getStringBetweenTwoStrings("<script>document.getElementById('ideoolink').innerHTML =","')", javaScript);
+      String? token = getStringAfterStartStringToEnd("&token=", tokenString);
+      String dlUrl = "https:/" + ideooLink + "&token=" + token + "&dl=1s";
+      //String dlUrl = "https:/" + ideooLink + "&dl=1s";
+      return dlUrl;
+    } catch (e) {
+      LoaderDialog.stopLoaderDialog();
+      Fluttertoast.showToast(msg: "Video has bee removed.",toastLength: Toast.LENGTH_LONG,backgroundColor:Colors.red );
+    }
+
+  }
+
+   String getStringBetweenTwoStrings(String start,String end,String str)
+  {
+
+    final startIndex = str.indexOf(start);
+    final endIndex = str.indexOf(end, startIndex + start.length);
+
+    return str.substring(startIndex + start.length, endIndex); // brown fox jumps
+  }
+
+  String getStringAfterStartStringToEnd(String start,String str)
+  {
+    final startIndex = str.indexOf(start);
+
+    return str.substring(startIndex + start.length, str.length);
+  }
+
+
+  getDownloadLinks (String id) async
+  {
+    LoaderDialog.showLoaderDialog(Get.context!);
+    downloadLinks.value = "";
+    downloadLinksList = [];
+    StringBuffer stringBuffer = StringBuffer("");
+    StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
+    for(StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!)
+      {
+        String? mp4Url = await getMp4UrlFromStreamTape(streamtapeFileItem.link!,isVideotoEmbededAllowed: true);
+        if (mp4Url != null) {
+          downloadLinksList.add(DownloadItem(streamtapeFileItem.name,mp4Url));
+          stringBuffer.write(mp4Url! +"\n\n");
+          downloadLinks.value = stringBuffer.toString();
+          this.update(["updateStreamtapeDownloadingList"]);
+        }
+      }
+    LoaderDialog.stopLoaderDialog();
   }
 
 
