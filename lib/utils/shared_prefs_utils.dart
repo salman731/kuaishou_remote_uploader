@@ -4,10 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SharedPrefsUtil
 {
   static final KEY_SELECTED_FOLDER = "SP_SELECTED_FOLDER";
+  static final KEY_SELECTED_FOLDER_ID = "SP_SELECTED_FOLDER_ID";
   static final KEY_STREAMTAPE_COOKIE = "SP_STREAMTAPE_COOKIE";
   static final KEY_STREAMTAPE_CSRF_TOKEN = "SP_STREAMTAPE_CSRF_TOKEN";
   static final KEY_IS_CONCURRENT_PROCESS = "SP_IS_CONCURRENT_PROCESS";
   static final KEY_IS_WEB_PAGE_PROCESS = "SP_IS_WEB_PAGE_PROCESS";
+  static final KEY_IS_AUTO_UPLOADING= "SP_IS_AUTO_UPLOADING";
 
   static late SharedPreferences sharedPreferences;
 

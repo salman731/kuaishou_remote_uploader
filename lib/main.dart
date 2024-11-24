@@ -1,26 +1,148 @@
+import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
+import 'package:butterfly_dialog/butterfly_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
-import 'package:kuaishou_remote_uploader/dialogs/loader_dialog.dart';
+import 'package:kuaishou_remote_uploader/dialogs/dialog_utils.dart';
 import 'package:kuaishou_remote_uploader/dialogs/video_player_dialog.dart';
+import 'package:kuaishou_remote_uploader/models/streamtape_download_status.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
+import 'package:kuaishou_remote_uploader/models/user_kuaishou.dart';
 import 'package:kuaishou_remote_uploader/streamtape_download_screen.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
+import 'package:kuaishou_remote_uploader/utils/web_utils.dart';
 import 'package:kuaishou_remote_uploader/widgets/custom_button.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sizer/sizer.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+void startBackgroundService() {
+  final service = FlutterBackgroundService();
+  service.startService();
+}
+
+void stopBackgroundService() {
+  final service = FlutterBackgroundService();
+  service.invoke("stop");
+}
+
+const notificationChannelId = 'my_foreground';
+
+const notificationId = 888;
+
+Future<void> initializeService() async {
+  final service = FlutterBackgroundService();
+
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    notificationChannelId, // id
+    'MY FOREGROUND SERVICE', // title
+    description:
+    'This channel is used for important notifications.', // description
+    importance: Importance.low, // importance must be at low or higher level
+  );
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+  await service.configure(
+    iosConfiguration: IosConfiguration(
+      autoStart: true,
+      onForeground: onStart,
+      onBackground: onIosBackground,
+    ),
+    androidConfiguration: AndroidConfiguration(
+      autoStart: true,
+      onStart: onStart,
+      isForegroundMode: false,
+      autoStartOnBoot: true,
+      notificationChannelId: notificationChannelId, // this must match with notification channel you created above.
+      initialNotificationTitle: 'AWESOME SERVICE',
+      initialNotificationContent: 'Initializing',
+      foregroundServiceNotificationId: notificationId,
+    ),
+  );
+}
+
+@pragma('vm:entry-point')
+Future<bool> onIosBackground(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+
+  return true;
+}
+
+@pragma('vm:entry-point')
+void onStart(ServiceInstance service) async {
+
+  DartPluginRegistrant.ensureInitialized();
+  if (service is AndroidServiceInstance) {
+    service.on('setAsForeground').listen((event) {
+      service.setAsForegroundService();
+    });
+
+    service.on('setAsBackground').listen((event) {
+      service.setAsBackgroundService();
+    });
+  }
+
+  service.on('stopService').listen((event) {
+    service.stopSelf();
+  });
+  Timer.periodic(const Duration(seconds: 30), (timer) async {
+    if (service is AndroidServiceInstance) {
+        print("This is background service" + DateTime.now().toString());
+
+        AppController appController = Get.put(AppController());
+        final appDocumentDirectory = await getApplicationDocumentsDirectory();
+        Hive.init(appDocumentDirectory.path);
+        appController.usernameListIdBox = await Hive.openBox("usernameListIdBox");
+        List<UserKuaishou> list = appController.getAllUserList();
+        List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await appController.getRemoteDownloadingStatus_background();
+        late String url = "";
+        for (UserKuaishou userKuaishou in list)
+          {
+             url = await appController.getStreamUrlForBackgroundUpload(userKuaishou.value!);
+             FlutterLocalNotificationsPlugin().show(
+               notificationId,
+               'Background Uploading Service Running....',
+               "Uploading in Progress : ${userKuaishou.value}",
+               const NotificationDetails(
+                 android: AndroidNotificationDetails(
+                   notificationChannelId,
+                   'MY FOREGROUND SERVICE',
+                   icon: 'ic_bg_service_small',
+                   ongoing: true,
+                 ),
+               ),
+             );
+             await appController.startUploading_background(url, streamTapeDownloadStatusList);
+
+          }
+
+    }
+  });
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final appDocumentDirectory = await getApplicationDocumentsDirectory();
   Hive.init(appDocumentDirectory.path);
+  //await initializeService();
+  //startBackgroundService();
   runApp( MyApp());
 }
 
@@ -82,7 +204,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void initState() {
-
+   /* Future.delayed(Duration(seconds: 5),(){
+      FlutterBackgroundService().invoke("setAsBackground");
+    });*/
+    //initAutoStart();
     appController.loginToStreamTape();
   }
 
@@ -107,6 +232,20 @@ class _MyHomePageState extends State<MyHomePage> {
     await appController.loginToStreamTape(isRefresh: true);
   }
 
+  /*Future<void> initAutoStart() async {
+    try {
+      //check auto-start availability.
+      var test = await (isAutoStartAvailable as FutureOr<bool>);
+      print(test);
+      //if available then navigate to auto-start setting page.
+      if (test) await getAutoStartPermission();
+    } on PlatformException catch (e) {
+      print(e);
+    }
+    if (!mounted) return;
+  }*/
+
+
   @override
   Widget build(BuildContext context) {
     // This method is rerun every time setState is called, for instance as done
@@ -130,7 +269,8 @@ class _MyHomePageState extends State<MyHomePage> {
               switch(item)
                   {
                 case "refresh":
-                  await reauthenticate();
+                  //await reauthenticate();
+                  DialogUtils.showUserListDialog(context);
                 case "streamtape_downloader":
                   Get.to(StreamtapeDownloadScreen());
               }
@@ -208,61 +348,149 @@ class _MyHomePageState extends State<MyHomePage> {
                       border: InputBorder.none,
                       suffixIcon: IconButton(
                         onPressed: () async {
-                          bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
-                          if(!isFolderExists)
+                          if(!appController.isGoingToRenameFolder.value)
                             {
-                              LoaderDialog.showLoaderDialog(context);
-                              bool isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
-                              if(isFolderCreated)
+                              bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
+                              if(!isFolderExists)
+                              {
+                                DialogUtils.showLoaderDialog(context,text: "Creating folder.....");
+                                bool isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
+                                if(isFolderCreated)
                                 {
+                                  appController.folderTextEditingController.clear();
                                   await appController.getFolderList();
                                   appController.showToast("Folder Created Successfully");
                                 }
-                              else
+                                else
                                 {
                                   appController.showToast("There is error while creating folder");
                                 }
-                              LoaderDialog.stopLoaderDialog();
+                                DialogUtils.stopLoaderDialog();
+                              }
+                              else
+                              {
+                                appController.showToast("Folder already exists");
+                              }
                             }
                           else
                             {
-                              appController.showToast("Folder already exists");
+                              DialogUtils.showLoaderDialog(context,text: "Renaming folder....");
+                              bool isUpdated = await appController.renameFolder(appController.folderTextEditingController.text, appController.selectedFolder.value.id!);
+                              if(isUpdated)
+                              {
+                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, appController.folderTextEditingController.text);
+                                appController.folderTextEditingController.clear();
+                                appController.isGoingToRenameFolder.value = false;
+                                appController.update(["updateFolderIcons"]);
+                                appController.showToast("Folder Renamed Successfully...");
+                              }
+                              else
+                              {
+                                appController.showToast("There is error while renaming folder");
+                              }
+                              await appController.getFolderList();
+                              DialogUtils.stopLoaderDialog();
+
                             }
 
                         },
-                        icon: Icon(Icons.create_new_folder),
+                        icon: Obx(()=> appController.isGoingToRenameFolder.value ? Icon(Icons.update) : Icon(Icons.create_new_folder)),
                       ),
                     ),
                   ),
                 ),
                 SizedBox(height: 10,),
                 Obx(()=>Center(
-                  child: Container(
-                    padding: EdgeInsets.all(8.0),
-                    decoration: BoxDecoration(// Background color
-                      borderRadius: BorderRadius.circular(5.0),
-                      border: Border.all(
-                        color: Colors.black, // Border color
-                        width: 2.0,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: EdgeInsets.all(8.0),
+                          decoration: BoxDecoration(// Background color
+                            borderRadius: BorderRadius.circular(5.0),
+                            border: Border.all(
+                              color: Colors.black, // Border color
+                              width: 2.0,
+                            ),
+                          ),
+                          child: DropdownButton<StreamTapeFolderItem>(
+                            value: appController.selectedFolder.value,
+                            //iconEnabledColor: AppColors.red,
+                            isExpanded: true,
+                            onChanged: ( newValue) {
+                              appController.selectedFolder.value = newValue!;
+                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, newValue.name!);
+                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, newValue.id!);
+                            },
+                            items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                              return DropdownMenuItem<StreamTapeFolderItem>(
+                                value: value,
+                                child: Text("${value.name}"),
+                              );
+                            }).toList(),
+                            //dropdownColor: Colors.black, // Dropdown background color
+                            underline: SizedBox(), // Remove default underline
+                          ),
+                        ),
                       ),
-                    ),
-                    child: DropdownButton<StreamTapeFolderItem>(
-                      value: appController.selectedFolder.value,
-                      //iconEnabledColor: AppColors.red,
-                      isExpanded: true,
-                      onChanged: ( newValue) {
-                        appController.selectedFolder.value = newValue!;
-                        SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, newValue.name!);
-                      },
-                      items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
-                        return DropdownMenuItem<StreamTapeFolderItem>(
-                          value: value,
-                          child: Text("${value.name}"),
-                        );
-                      }).toList(),
-                      //dropdownColor: Colors.black, // Dropdown background color
-                      underline: SizedBox(), // Remove default underline
-                    ),
+                      GetBuilder<AppController>(
+                        id:"updateFolderIcons",
+                        builder: (_){
+                          if(!appController.isGoingToRenameFolder.value)
+                            {
+                              return IconButton(
+                                onPressed: () async {
+                                  appController.isGoingToRenameFolder.value = true;
+                                  appController.folderTextEditingController.text = appController.selectedFolder.value.name!;
+                                  appController.update(["updateFolderIcons"]);
+                                },
+                                icon: Icon(Icons.drive_file_rename_outline),
+                              );
+                            }
+                          else
+                            {
+                              return IconButton(
+                                onPressed: () async {
+                                  appController.isGoingToRenameFolder.value = false;
+                                  appController.folderTextEditingController.text = "";
+                                  appController.update(["updateFolderIcons"]);
+                                },
+                                icon: Icon(Icons.cancel),
+                              );
+                            }
+                        },
+                      ),
+                        Obx(()=> Opacity(
+                          opacity: appController.isGoingToRenameFolder.value ? 0.5 : 1,
+                          child: IconButton(
+                              onPressed: appController.isGoingToRenameFolder.value ? null : () async {
+                                ButterflyAlertDialog.show(
+                                  context: Get.context!,
+                                  title: 'Delete',
+                                  subtitle: 'Are sure you want to delete it?',
+                                  alertType: AlertType.delete,
+                                  onConfirm: () async {
+                                    bool isDeleted = await appController.deleteFolder(appController.selectedFolder.value.id!);
+                                    DialogUtils.showLoaderDialog(context,text: "Deleting folder....");
+                                    if(isDeleted)
+                                    {
+                                      appController.showToast("Folder Deleted Successfully...");
+                                    }
+                                    else
+                                    {
+                                      appController.showToast("There is error while deleting folder");
+                                    }
+                                    await appController.getFolderList(isDeleted: true);
+                                    DialogUtils.stopLoaderDialog();
+                                  },
+                                );
+                              },
+                              icon: Icon(Icons.delete_forever),
+                            ),
+                        ),
+                        )
+
+                    ],
                   ),
                 ),
                 ),
@@ -320,9 +548,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
                         Container(
                           padding: EdgeInsets.all(12),
-                          height: 300,
+                          //height: 300,
                           child: ListView.builder(
                               shrinkWrap: true,
+                              physics: NeverScrollableScrollPhysics(),
                               controller: appController.scrollController,
                               itemCount: appController.downloadingList.length,
                               itemBuilder: (context,index){
@@ -384,30 +613,35 @@ class _MyHomePageState extends State<MyHomePage> {
           ))
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async  {
-           if(appController.isConcurrentProcessing.value)
-             {
-               await appController.concurrentStartUploading(appController.urlTextEditingController.text);
-             }
-           else
-             {
-               await appController.startUploading(appController.urlTextEditingController.text);
-             }
-           await Future.delayed(Duration(seconds: 1));
-           //if (!appController.isDownloadStatusUpdating.value) {
-           await appController.downloadingCompleter.future;
-           if (!appController.isConcurrentProcessing.value) {
-             await appController.getDownloadingVideoStatus(isSync: true);
-           } else {
-             await appController.getConcurrentDownloadingVideoStatus(isSync: true);
-           }
-           //}
-           appController.urlTextEditingController.clear();
-           previousTextFieldTxt = "";
-        },
-        tooltip: 'Upload',
-        child: const Icon(Icons.upload),
+      floatingActionButton: Obx(()=> Opacity(
+        opacity: appController.isUploading.value ? 0.5 : 1,
+        child: FloatingActionButton(
+            onPressed: !appController.isUploading.value ? () async  {
+                FocusManager.instance.primaryFocus?.unfocus();
+               if(appController.isConcurrentProcessing.value)
+                 {
+                   await appController.concurrentStartUploading(appController.urlTextEditingController.text);
+                 }
+               else
+                 {
+                   await appController.startUploading(appController.urlTextEditingController.text);
+                 }
+               await Future.delayed(Duration(seconds: 1));
+               //if (!appController.isDownloadStatusUpdating.value) {
+               await appController.downloadingCompleter.future;
+               if (!appController.isConcurrentProcessing.value) {
+                 await appController.getDownloadingVideoStatus(isSync: true);
+               } else {
+                 await appController.getConcurrentDownloadingVideoStatus(isSync: true);
+               }
+               //}
+               appController.urlTextEditingController.clear();
+               previousTextFieldTxt = "";
+            } : null,
+            tooltip: 'Upload',
+            child: !appController.isUploading.value ? const Icon(Icons.upload) : CircularProgressIndicator(),
+          ),
+      ),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }

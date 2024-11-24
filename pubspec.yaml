@@ -49,6 +49,11 @@ dependencies:
   ffmpeg_kit_flutter: ^6.0.3
   hive: ^2.2.3
   butterfly_dialog: ^0.0.3
+  azlistview: ^2.0.0
+  flutter_background_service: ^5.0.10
+  flutter_local_notifications: ^18.0.1
+  flutter_autostart: ^0.0.2
+  html_unescape: ^2.0.0
 
 
 dev_dependencies:

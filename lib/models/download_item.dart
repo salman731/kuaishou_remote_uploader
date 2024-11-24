@@ -1,10 +1,20 @@
 
 
+import 'package:get/get.dart';
+
 class DownloadItem
 {
   String? name;
 
-  String? url;
+  String? downloadUrl;
 
-  DownloadItem(this.name, this.url);
+  String streamTapeUrl;
+
+  String? imageUrl;
+
+  RxBool? isLoading;
+
+  RxBool? isSelected;
+
+  DownloadItem(this.name, this.downloadUrl,this.imageUrl,this.streamTapeUrl,this.isLoading,this.isSelected);
 }

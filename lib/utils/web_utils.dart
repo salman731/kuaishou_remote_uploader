@@ -1,5 +1,6 @@
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as parser;
@@ -34,6 +35,14 @@ class WebUtils
      http.Response response = await http.Client().get(Uri.parse(url),headers: headers);
      return response.body!;
    }
+
+   static Future<Uint8List> makeGetRequestWithBodyBytes(String url,
+       {Map<String, String>? headers}) async
+   {
+     http.Response response = await http.Client().get(Uri.parse(url),headers: headers);
+     return response.bodyBytes!;
+   }
+
 
    static Future<String> makePostRequest (String url,Object body, {Map<String,String>? headers,Function(String?)? requestCookieCallBack}) async
    {
