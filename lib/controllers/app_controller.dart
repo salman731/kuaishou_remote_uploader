@@ -58,6 +58,7 @@ class   AppController extends GetxController {
   String KOUAISHOU_LIVE_API_URL_2 = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
   String KOUAISHOU_LIVE_API_URL_3 = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=UNKNOWN_PLATFORM&captchaToken=";
   String KOUAISHOU_LIVE_API_URL_4 = "https://v.m.chenzhongtech.com/rest/k/live/byUser?kpn=KUAISHOU&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
+  String KOUAISHOU_LIVE_API_URL_5 = "https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=UNKNOWN_PLATFORM&captchaToken=";
   String KOUAISHOU_MAIN_MOBILE_URL = "https://livev.m.chenzhongtech.com/fw/live/";
   String KOUAISHOU_LIVE_FOLLOW_API = "https://live.kuaishou.com/live_api/follow/living";
   String KOUAISHOU_USER_API = "https://live.kuaishou.com/live_api/profile/public?count=4&pcursor=&principalId=s14042236&hasMore=true";
@@ -116,6 +117,8 @@ class   AppController extends GetxController {
   RxInt unfollowUserUploaded = 0.obs;
   RxString totalUnfollowUserUploadedProgress = "".obs;
   RxInt unfollowUserOnline = 0.obs;
+  RxInt unfollowUserErrorCaptcha = 0.obs;
+  RxInt unfollowUserError = 0.obs;
 
   /* initTimer()
   {
@@ -473,18 +476,37 @@ class   AppController extends GetxController {
     return finalFlvUrl;
   }
 
-  Future<String> getDirectKuaishouFlvUrlOrginal (String kuaishouLink) async
+  Future<(String,String)> getDirectKuaishouFlvUrlOrginal (String kuaishouLink,String did) async
   {
-    String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink);
-    Uri orginalUri = Uri.parse(orginalLink!);
-    String? eid = orginalUri.path.split("/").last;
-    String? efid = orginalUri.queryParameters["efid"];
-    var requestMap = {"efid":efid,"eid":eid,"source":6,"shareMethod":"card","clientType":"WEB_OUTSIDE_SHARE_H5"};
-    var headers = {"Referer":orginalLink,"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36","Content-Type":"application/json","Accept-Encoding":"gzip, deflate, br","Accept":"*/*"};
-    String response = await WebUtils.makePostRequest(KOUAISHOU_LIVE_API_URL, jsonEncode(requestMap),headers: headers);
-    Map<String,dynamic> jsonResponse = json.decode(response);
-    String finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"];
-    return finalFlvUrl;
+    String finalFlvUrl = "";
+    String error = "";
+    try {
+      String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink);
+      Uri orginalUri = Uri.parse(orginalLink!);
+      String? eid = orginalUri.path.split("/").last;
+      String? efid = orginalUri.queryParameters["efid"];
+      var requestMap = {"efid":efid,"eid":eid,"source":6,"shareMethod":"card","clientType":"WEB_OUTSIDE_SHARE_H5"};
+      int currentTimeInMillis = DateTime.now().millisecondsSinceEpoch;
+      var headers = {"Referer":orginalLink,"Cookie":"did=${did}; didv=${currentTimeInMillis}","Content-Type":"application/json"};
+      String response = await WebUtils.makePostRequest(KOUAISHOU_LIVE_API_URL_5, jsonEncode(requestMap),headers: headers);
+      Map<String,dynamic> jsonResponse = json.decode(response);
+      if (jsonResponse["result"] == 1) {
+        finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"];
+        if (jsonResponse["liveStreamEndReason"] != null && jsonResponse["liveStreamEndReason"] == "The Live ended.") {
+              finalFlvUrl = "";
+            }
+      }
+      else
+        {
+          if(jsonResponse["result"] == 2001 && jsonResponse["captchaConfig"] != null)
+            {
+              error = "CAPTCHA REQUIRED";
+            }
+        }
+    } catch (e) {
+      error = "#ERROR# : ${e.toString()}";
+    }
+    return (finalFlvUrl,error);
 
   }
 
@@ -1445,6 +1467,8 @@ class   AppController extends GetxController {
       List<UserKuaishou> list = getAllUserList();
       unfollowUserUploaded.value = 0;
       unfollowUserOnline.value = 0;
+      unfollowUserError.value = 0;
+      unfollowUserErrorCaptcha.value = 0;
       List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
       totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
       for (UserKuaishou userKuaishou in listFiltered) {
@@ -1455,16 +1479,44 @@ class   AppController extends GetxController {
               unfollowUserOnline.value  = unfollowUserOnline.value + 1;
               bool isUploaded = await startUploading_background(url, streamTapeDownloadStatusList);
               if(isUploaded)
-                {
-                  unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
-                }
+              {
+                unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
+              }
             }
           } catch (e) {
             print(e);
           }
-
-          await Future.delayed(Duration(seconds: getIntBetweenRange(15, 25)));
           totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
+          await Future.delayed(Duration(seconds: getIntBetweenRange(20, 30)));
+
+          //   (String,String) urlError = await getDirectKuaishouFlvUrlOrginal(initialUrl,"web_7b5ad32ebac046488ef1a1c65cdc80f3");
+          //   if (urlError.$2.isEmpty) {
+          //     if (urlError.$1.isNotEmpty) {
+          //        unfollowUserOnline.value  = unfollowUserOnline.value + 1;
+          //        bool isUploaded = await startUploading_background(urlError.$1, streamTapeDownloadStatusList);
+          //        if(isUploaded)
+          //          {
+          //            unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
+          //          }
+          //      }
+          //   }
+          //   else
+          //     {
+          //       if(urlError.$2 == "CAPTCHA REQUIRED")
+          //         {
+          //           unfollowUserErrorCaptcha.value = unfollowUserErrorCaptcha.value + 1;
+          //         }
+          //       else
+          //         {
+          //           unfollowUserError.value = unfollowUserError.value + 1;
+          //         }
+          //     }
+          // } catch (e) {
+          //   print(e);
+          // }
+          // totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
+          // await Future.delayed(Duration(seconds: getIntBetweenRange(30, 40)));
+
       }
       isUnfollowUserProcessing.value = false;
     });

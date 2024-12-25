@@ -506,6 +506,8 @@ class _MyHomePageState extends State<MyHomePage> {
               switch(item)
                   {
                 case "refresh":
+                  //WebViewUtils webViewUtils = WebViewUtils();
+                  //webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/liazi222222", ".flv");
                   await appController.showReauthenticateStreamtapeDialog();
                   //await appController.getLiveUserList();
                   // var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
@@ -718,6 +720,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     Text("Total Unfollowed User : ${appController.totalUnfollowUserUploadedProgress.value}",style: TextStyle(color: Colors.purpleAccent),),
                     Text("User Uploaded : ${appController.unfollowUserUploaded.value}",style: TextStyle(color: Colors.green),),
                     Text("User Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
+                    // Text("Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
+                    // Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
                     Opacity(
                       opacity: appController.isUnfollowUserProcessing.value ? 0.5 : 1,
                       child: Slider(
