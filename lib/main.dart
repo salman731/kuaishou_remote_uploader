@@ -1,19 +1,28 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:developer';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:async/async.dart';
+import 'package:background_mode_new/background_mode_new.dart';
 import 'package:butterfly_dialog/butterfly_dialog.dart';
+import 'package:dropdown_textfield/dropdown_textfield.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
 import 'package:kuaishou_remote_uploader/dialogs/dialog_utils.dart';
 import 'package:kuaishou_remote_uploader/dialogs/video_player_dialog.dart';
+import 'package:kuaishou_remote_uploader/enums/background_mode_time_enum.dart';
+import 'package:kuaishou_remote_uploader/models/kuaishou_live_user.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_download_status.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
@@ -22,19 +31,20 @@ import 'package:kuaishou_remote_uploader/streamtape_download_screen.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/web_utils.dart';
+import 'package:kuaishou_remote_uploader/utils/web_view_utils.dart';
 import 'package:kuaishou_remote_uploader/widgets/custom_button.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:stop_watch_timer/stop_watch_timer.dart';
 
-void startBackgroundService() {
-  final service = FlutterBackgroundService();
-  service.startService();
+final service = FlutterBackgroundService();
+Future<void> startBackgroundService() async {
+  await service.startService();
 }
 
 void stopBackgroundService() {
-  final service = FlutterBackgroundService();
-  service.invoke("stop");
+  service.invoke("stopService");
 }
 
 const notificationChannelId = 'my_foreground';
@@ -42,14 +52,13 @@ const notificationChannelId = 'my_foreground';
 const notificationId = 888;
 
 Future<void> initializeService() async {
-  final service = FlutterBackgroundService();
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     notificationChannelId, // id
     'MY FOREGROUND SERVICE', // title
     description:
     'This channel is used for important notifications.', // description
-    importance: Importance.low, // importance must be at low or higher level
+    importance: Importance.defaultImportance, // importance must be at low or higher level
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -85,10 +94,105 @@ Future<bool> onIosBackground(ServiceInstance service) async {
   return true;
 }
 
+bool isBetweenTime(int minhour,int maxHour)
+{
+  DateTime now = DateTime.now();
+
+  // Check if the current hour is greater than or equal to 18 (6 PM)
+  if (now.hour >= minhour && now.hour <=maxHour) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+int getIntBetweenRange(int min, int max)
+{
+  final _random = new Random();
+  /**
+   * Generates a positive random integer uniformly distributed on the range
+   * from [min], inclusive, to [max], exclusive.
+   */
+  return min + _random.nextInt(max - min);
+}
+
+Timer makePeriodicTimer(
+    Duration duration,
+    void Function(Timer? timer) callback, {List<Duration>? timeSpecificDuration,bool fireNow = false, bool isCustomTimer = false,}) {
+  Timer timer = isCustomTimer ? launchTimer(duration,timeSpecificDuration!,callback: callback) : Timer.periodic(duration, callback);
+  if (fireNow) {
+    callback(timer);
+  }
+  return timer;
+}
+
+Duration getDurationBaseOnTime (List<Duration> list)
+{
+  if(isBetweenTime(0,5)) // Midnight
+      {
+        return list[0];
+  }
+  else if(isBetweenTime(6,15)) // morning afternoon
+      {
+    return list[1];
+  }
+  else // evening night
+      {
+    return list[2];
+  }
+}
+
+Timer launchTimer(Duration duration,List<Duration> timeSpecificDurationList,{ required Function callback})
+{
+  return Timer(duration, () {
+
+    callback(null);
+    int variableTime = getIntBetweenRange(-2,3);
+    if(isBetweenTime(0,5)) // Midnight
+      {
+        launchTimer(timeSpecificDurationList[0],timeSpecificDurationList,callback: callback);
+      }
+    else if(isBetweenTime(6,15)) // morning afternoon
+      {
+        launchTimer(timeSpecificDurationList[1],timeSpecificDurationList,callback: callback);
+      }
+    else if(isBetweenTime(16,23)) // evening night
+      {
+        launchTimer(timeSpecificDurationList[2],timeSpecificDurationList,callback: callback);
+      }
+
+  });
+}
+
+Future<void> showNotification({required String title,required String content}) async
+{
+  await FlutterLocalNotificationsPlugin().show(
+    notificationId,
+    title,
+    content,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        notificationChannelId,
+        'MY FOREGROUND SERVICE',
+        icon: 'ic_bg_service_small',
+        ongoing: true,
+      ),
+    ),
+  );
+}
+
+String formatTime(int seconds) {
+  int minutes = seconds ~/ 60;  // Integer division for minutes
+  int remainingSeconds = seconds % 60;  // Get the remainder for seconds
+
+  // Format as mm:ss (e.g., "03:05")
+  return '${minutes.toString().padLeft(2, '0')} : ${remainingSeconds.toString().padLeft(2, '0')}';
+}
+
+
+
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
-
-  DartPluginRegistrant.ensureInitialized();
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
       service.setAsForegroundService();
@@ -99,50 +203,141 @@ void onStart(ServiceInstance service) async {
     });
   }
 
-  service.on('stopService').listen((event) {
-    service.stopSelf();
+  service.on('stopService').listen((event) async {
+    await service.stopSelf();
   });
-  Timer.periodic(const Duration(seconds: 30), (timer) async {
+  await SharedPrefsUtil.initSharedPreference();
+  int midNightDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER,defaultValue: 25).toInt(); // 12:00 AM -> 06:00 AM
+  int morningAfterNoonDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER,defaultValue: 15).toInt(); // 6:00 AM -> 4:00 PM
+  int eveningNightDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER,defaultValue: 10).toInt(); // 4:00 PM -> 12:00 AM
+  List<Duration> listDuration = [Duration(minutes: midNightDuration),Duration(minutes: morningAfterNoonDuration),Duration(minutes: eveningNightDuration)];
+
+  int userOnline = 0;
+  int userNewUploaded = 0;
+  int userOldUploaded = 0;
+
+
+  Timer timer = makePeriodicTimer(getDurationBaseOnTime(listDuration),timeSpecificDuration:listDuration,(timer) async {
+    bool isProcessingDone = false;
+    bool isError = false;
+    String remainingTime = "";
+    String errorMsg = "";
+    final stopWatchTimer = StopWatchTimer(
+        mode: StopWatchMode.countDown,
+        presetMillisecond: StopWatchTimer.getMilliSecFromMinute(getDurationBaseOnTime(listDuration).inMinutes), // millisecond => minute.
+        onChangeRawSecond: (value) async {
+          remainingTime = "Next in : ${formatTime(value)}";
+          if (isProcessingDone) {
+            await showNotification(title: "Uploading Service (${remainingTime})",content: "✅ User Online: ${userOnline} | Newly Uploaded User: ${userNewUploaded} | Current User Uploading: ${userOldUploaded}");
+          }
+          else if (isError)
+            {
+              await showNotification(title: "Uploading Service (${remainingTime})",content: "Exception : " + errorMsg);
+            }
+         }
+    );
+    stopWatchTimer.onStartTimer();
     if (service is AndroidServiceInstance) {
-        print("This is background service" + DateTime.now().toString());
+      //print("This is background service" + DateTime.now().toString());
 
-        AppController appController = Get.put(AppController());
-        final appDocumentDirectory = await getApplicationDocumentsDirectory();
-        Hive.init(appDocumentDirectory.path);
-        appController.usernameListIdBox = await Hive.openBox("usernameListIdBox");
-        List<UserKuaishou> list = appController.getAllUserList();
-        List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await appController.getRemoteDownloadingStatus_background();
-        late String url = "";
-        for (UserKuaishou userKuaishou in list)
+      AppController appController = Get.put(AppController());
+      final appDocumentDirectory = await getApplicationDocumentsDirectory();
+      Hive.init(appDocumentDirectory.path);
+      appController.usernameListIdBox = await Hive.openBox("usernameListIdBox");
+      List<UserKuaishou> list = appController.getAllUserList();
+      await appController.createFolderOnNextDay();
+
+      List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await appController.getRemoteDownloadingStatus_background();
+      List<StopWatchTimer> listStopWatchTimer = [];
+      await showNotification(title: "Uploading Service (${remainingTime})",content: "Fetching Live User List......");
+
+      (List<ListElement>,String) liveUserList = await appController.getLiveUserList((exTime) async {
+        if(!exTime.$3)
           {
-             url = await appController.getStreamUrlForBackgroundUpload(userKuaishou.value!);
-             FlutterLocalNotificationsPlugin().show(
-               notificationId,
-               'Background Uploading Service Running....',
-               "Uploading in Progress : ${userKuaishou.value}",
-               const NotificationDetails(
-                 android: AndroidNotificationDetails(
-                   notificationChannelId,
-                   'MY FOREGROUND SERVICE',
-                   icon: 'ic_bg_service_small',
-                   ongoing: true,
-                 ),
-               ),
-             );
-             await appController.startUploading_background(url, streamTapeDownloadStatusList);
-
+            for(StopWatchTimer stopwatch in listStopWatchTimer)
+            {
+              stopwatch.onStopTimer();
+            }
+            listStopWatchTimer = [];
           }
 
+        StopWatchTimer stopWatchTimer = StopWatchTimer(
+            mode: StopWatchMode.countDown,
+            presetMillisecond: StopWatchTimer.getMilliSecFromMinute(exTime.$2), // millisecond => minute.
+            onChangeRawSecond: (value) async {
+              remainingTime = "Re-Trying in : ${formatTime(value)}";
+              await showNotification(title: "Uploading Service ($remainingTime)",content: "Exception Occured : " + exTime.$1);
+            },
+            onEnded: () async {
+              await showNotification(title: "Uploading Service (${remainingTime})",content: "Fetching Live User List......");
+              }
+        );
+        stopWatchTimer.onStartTimer();
+        listStopWatchTimer.add(stopWatchTimer);
+      });
+
+      for(StopWatchTimer stopwatch in listStopWatchTimer)
+      {
+        stopwatch.onStopTimer();
+      }
+
+      await showNotification(title: "Uploading Service (${remainingTime})",content: "Fetched Successfully | User : ${liveUserList.$1.length} ");
+      userOnline = liveUserList.$1.length;
+      userNewUploaded = 0;
+      userOldUploaded = 0;
+      if (liveUserList.$1.length > 0) {
+        for (UserKuaishou userKuaishou in list) {
+
+          await showNotification(title: "Uploading Service (${remainingTime} (${list.indexOf(userKuaishou) + 1}/${list.length})) ",content: "⏳ UPLOADING ON STREAMTAPE : ${userKuaishou.value!}");
+          for (ListElement user in liveUserList.$1) {
+
+            if (user.author!.id!.toLowerCase() == userKuaishou.value!.toLowerCase()) {
+
+                String url = user.playUrls.first.adaptationSet!.representation.first.url!;
+                if (url.isNotEmpty) {
+                  bool isUploaded = await appController.startUploading_background(user.playUrls.first.adaptationSet!.representation.first.url!, streamTapeDownloadStatusList);
+
+                  if (isUploaded) {
+                    userNewUploaded++;
+                  } else {
+                    userOldUploaded++;
+                  }
+                }
+              }
+
+            }
+          }
+        isProcessingDone = true;
+        await showNotification(title: "Uploading Service (${remainingTime})",content: "✅ User Online: ${userOnline} | Newly Uploaded User: ${userNewUploaded} | Current User Uploading: ${userOldUploaded}");
+      }
+      else
+        {
+          if(liveUserList.$2.isNotEmpty)
+            {
+              isError = true;
+              errorMsg = liveUserList.$2;
+              await showNotification(title: "Uploading Service (${remainingTime})",content: "Exception : " + errorMsg);
+            }
+          else
+            {
+              await showNotification(title: "Uploading Service (${remainingTime})",content: "❌ User list is empty.....");
+            }
+        }
     }
-  });
+    // });
+  },fireNow: true,isCustomTimer: true);
+
 }
+  //Timer.periodic(const Duration(minutes: 20),
+//"Uploading in Progress : ${userKuaishou.value}"
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final appDocumentDirectory = await getApplicationDocumentsDirectory();
   Hive.init(appDocumentDirectory.path);
-  //await initializeService();
-  //startBackgroundService();
+  await initializeService();
+  await SharedPrefsUtil.initSharedPreference();
+  startBackgroundService();
   runApp( MyApp());
 }
 
@@ -201,6 +396,12 @@ class _MyHomePageState extends State<MyHomePage> {
   AppController appController = Get.put(AppController());
 
   String? previousTextFieldTxt = "";
+  late AppLifecycleListener appLifecycleListener;
+  AppLifecycleState? previousState;
+  FocusNode searchFocusNode = FocusNode();
+  FocusNode textFieldFocusNode = FocusNode();
+
+
 
   @override
   void initState() {
@@ -208,8 +409,44 @@ class _MyHomePageState extends State<MyHomePage> {
       FlutterBackgroundService().invoke("setAsBackground");
     });*/
     //initAutoStart();
-    appController.loginToStreamTape();
+    Future.delayed(Duration(seconds: 0),() async{
+      await appController.loginToStreamTape();
+      appLifecycleListener = AppLifecycleListener(
+          onResume: () async {
+            if (previousState!= null && !appController.isDownloadStatusUpdating.value) {
+              await SharedPrefsUtil.reloadSharedPreferences();
+              if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED,defaultValue: false))
+                {
+                  await appController.getFolderList();
+                  SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED,false);
+                }
+              if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS,defaultValue: true)) {
+                await appController.getDownloadingVideoStatus();
+              } else {
+                await appController.getConcurrentDownloadingVideoStatus();
+              }
+              previousState = null;
+            }
+          },
+          onStateChange: (value){
+            if(value == AppLifecycleState.paused)
+            {
+              previousState = value;
+            }
+            else
+            {
+              previousState == null;
+            }
+          }
+
+      );
+      int min = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 15);
+      await appController.uploadUnfollowUserWithWebView(min);
+    });
+
   }
+
+
 
   getTextColor(String status)
   {
@@ -269,13 +506,26 @@ class _MyHomePageState extends State<MyHomePage> {
               switch(item)
                   {
                 case "refresh":
-                  //await reauthenticate();
-                  DialogUtils.showUserListDialog(context);
-                case "streamtape_downloader":
+                  await appController.showReauthenticateStreamtapeDialog();
+                  //await appController.getLiveUserList();
+                  // var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
+                  // String? orginalUrl = await WebUtils.getOriginalUrl("https://v.kuaishou.com/cx20Ka",headers: header);
+                  // String? response = await WebUtils.makeGetRequest(orginalUrl!,headers: header);
+                  // print(response);
+                  // String? response2 = await appController.getStreamUrlForBackgroundUpload_Web2("https://v.kuaishou.com/cx20Ka");
+                  // print(response2);
+                 case "streamtape_downloader":
                   Get.to(StreamtapeDownloadScreen());
+                case "add_user":
+                  DialogUtils.showUserListDialog(context);
+                case "restart_background_service":
+                  appController.restartBackgroundService(isToEnableSlider: false);
+
               }
             },
             itemBuilder: (context) => [
+              PopupMenuItem<String>(value: "add_user", child: Text('Add User')),
+              PopupMenuItem<String>(value: "restart_background_service", child: Text('Restart Background Service')),
               PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
               PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
               PopupMenuItem(
@@ -304,6 +554,190 @@ class _MyHomePageState extends State<MyHomePage> {
 
                 ),
               ),
+              PopupMenuItem(
+                child: Obx(()=> CheckboxListTile(
+                  activeColor: Colors.blue,
+                  value: appController.isBackgroundModeEnable.value,
+                  onChanged: (value){
+                    appController.isBackgroundModeEnable.value = !appController.isBackgroundModeEnable.value;
+                    SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_BACKGROUNDMODE_ENABLE, appController.isBackgroundModeEnable.value);
+                    appController.processBackgroundMode();
+                  },
+                  title: Text("Enable Background Mode"),
+                ),
+
+                ),
+              ),
+              PopupMenuItem(child: Obx(()=> appController.isBackGroundModeTimeRadioButtonsVisible.value ? Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: ListTile(
+                                title: const Text('Forever'),
+                                leading: Radio<BackgroundModeTimeEnum>(
+                                  value: BackgroundModeTimeEnum.ALLTIME,
+                                  groupValue: appController.backgroundModeTimeEnumRadioValue.value,
+                                  onChanged: (BackgroundModeTimeEnum? value) {
+                                    appController.backgroundModeTimeEnumRadioValue.value = BackgroundModeTimeEnum.ALLTIME;
+                                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME, BackgroundModeTimeEnum.ALLTIME.name);
+                                    appController.processBackgroundMode();
+                                    //SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME_RANGE, "");
+                                  },
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: ListTile(
+                                title: const Text('Time Specific'),
+                                leading: Radio<BackgroundModeTimeEnum>(
+                                  value: BackgroundModeTimeEnum.TIMESPECIFIC,
+                                  groupValue: appController.backgroundModeTimeEnumRadioValue.value,
+                                  onChanged: (BackgroundModeTimeEnum? value) {
+                                    appController.backgroundModeTimeEnumRadioValue.value = BackgroundModeTimeEnum.TIMESPECIFIC;
+                                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME, BackgroundModeTimeEnum.TIMESPECIFIC.name);
+                                    appController.processBackgroundMode();
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ) : SizedBox.shrink(),
+              )
+
+              ),
+              PopupMenuItem(child: Obx(()=> appController.isBackgroundModeRangeSliderVisible.value ? Column(mainAxisAlignment: MainAxisAlignment.start,children: [
+                Text("Background Mode Time Interval (24 H) (${appController.backgroundModeTimeSpecificRangeValue.value.start.toInt()} -> ${appController.backgroundModeTimeSpecificRangeValue.value.end.toInt()})"),
+                RangeSlider(
+                  values: appController.backgroundModeTimeSpecificRangeValue.value,
+                  max: 23,
+                  min: 0,
+                  divisions: 24,
+                  labels: RangeLabels(
+                    appController.backgroundModeTimeSpecificRangeValue.value.start.toInt().toString(),
+                    appController.backgroundModeTimeSpecificRangeValue.value.end.toInt().toString(),
+                  ),
+                  onChanged: (RangeValues values) {
+                    print("range slider is changing......");
+                    appController.backgroundModeTimeSpecificRangeValue.value = values;
+
+                  },
+                  onChangeEnd: (RangeValues values){
+                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME_RANGE, "${values.start.toInt()}:${values.end.toInt()}");
+                    appController.processBackgroundMode();
+                  },
+                )
+              ],) : SizedBox.shrink(),
+              ),),
+              PopupMenuItem(
+                child: Obx(()=>  Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Text("Mid Night Background Interval 12:00 AM -> 06:00 AM (${appController.midNightSliderValue.value.toInt()} min)"),
+                    Opacity(
+                      opacity: appController.isSliderEnable.value ? 1 : 0.5,
+                      child: Slider(
+                        value: appController.midNightSliderValue.value,
+                        max: 100,
+                        min: 1,
+                        divisions: 100,
+                        label: appController.midNightSliderValue.toInt().toString(),
+                        onChanged: appController.isSliderEnable.value ?  (double value) {
+                          appController.midNightSliderValue.value = value.toInt().toDouble();
+                        } : null,
+                        onChangeEnd: (value) async{
+                          SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, value.toDouble());
+                          if(isBetweenTime(0,5)) {
+                            await appController.restartBackgroundService();
+                          }
+                        },
+                      ),
+                    ),
+
+
+                  ],
+                )),
+              ),
+              PopupMenuItem(
+                child: Obx(()=> Column(mainAxisAlignment: MainAxisAlignment.start,children: [
+                  Text("Morning Afternoon Background Interval 6:00 AM -> 4:00 PM (${appController.morningAfterNoonSliderValue.value.toInt()} min)"),
+                   Opacity(
+                     opacity: appController.isSliderEnable.value ? 1 : 0.5,
+                     child: Slider(
+                      value: appController.morningAfterNoonSliderValue.value,
+                      max: 100,
+                      min: 1,
+                      divisions: 100,
+                      label: appController.morningAfterNoonSliderValue.toInt().toString(),
+                      onChanged: appController.isSliderEnable.value ?  (double value) {
+                        appController.morningAfterNoonSliderValue.value = value.toInt().toDouble();
+                      } : null,
+                       onChangeEnd: (value) async {
+                         SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, value.toDouble());
+                         if(isBetweenTime(6,15)){
+                           await appController.restartBackgroundService();
+                         }
+                       }
+                                       ),
+                   ),
+
+
+                ],)),
+              ),
+              PopupMenuItem(
+                child: Obx(()=> Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                  Text("Evening Night Background Interval 4:00 PM -> 12:00 AM (${appController.eveningNightSliderValue.value.toInt()} min)"),
+                  Opacity(
+                    opacity: appController.isSliderEnable.value ? 1 : 0.5,
+                    child: Slider(
+                      value: appController.eveningNightSliderValue.value,
+                      max: 100,
+                      min: 1,
+                      divisions: 100,
+                      label: appController.eveningNightSliderValue.toInt().toString(),
+                      onChanged: appController.isSliderEnable.value ? (double value) {
+                        appController.eveningNightSliderValue.value = value.toInt().toDouble();
+                      } : null,
+                      onChangeEnd: (value) async {
+                        SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER, value.toDouble());
+                        if(isBetweenTime(16,23))
+                          {
+                            await appController.restartBackgroundService();
+                          }
+
+                      }
+                    ),
+                  ),
+                ],)),
+              ),
+              PopupMenuItem(
+                child: Obx(()=> Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Text((appController.isUnfollowUserProcessing.value ? "Unfollow User Uploading in Progress....." :"Unfollow User Background Timer Interval Duration (${appController.unfollowUserIntervalSliderValue.value} min)") + " " + appController.unfollowUploadRemainingTime.value),
+                    Text("Total Unfollowed User : ${appController.totalUnfollowUserUploadedProgress.value}",style: TextStyle(color: Colors.purpleAccent),),
+                    Text("User Uploaded : ${appController.unfollowUserUploaded.value}",style: TextStyle(color: Colors.green),),
+                    Text("User Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
+                    Opacity(
+                      opacity: appController.isUnfollowUserProcessing.value ? 0.5 : 1,
+                      child: Slider(
+                          value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
+                          max: 100,
+                          min: 1,
+                          divisions: 100,
+                          label: appController.unfollowUserIntervalSliderValue.toString(),
+                          onChanged: !appController.isUnfollowUserProcessing.value ?  (double value) {
+                            appController.unfollowUserIntervalSliderValue.value = value.toInt();
+                          } : null,
+                          onChangeEnd: (value) async {
+                            SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
+                            await appController.uploadUnfollowUserWithWebView(value.toInt());
+
+                          }
+                      ),
+                    ),
+                  ],)),
+              )
             ],
 
           ),
@@ -354,8 +788,8 @@ class _MyHomePageState extends State<MyHomePage> {
                               if(!isFolderExists)
                               {
                                 DialogUtils.showLoaderDialog(context,text: "Creating folder.....");
-                                bool isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
-                                if(isFolderCreated)
+                                (bool,String) isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
+                                if(isFolderCreated.$1)
                                 {
                                   appController.folderTextEditingController.clear();
                                   await appController.getFolderList();
@@ -403,7 +837,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 Obx(()=>Center(
                   child: Row(
                     children: [
-                      Expanded(
+                      /*Expanded(
                         child: Container(
                           padding: EdgeInsets.all(8.0),
                           decoration: BoxDecoration(// Background color
@@ -430,6 +864,40 @@ class _MyHomePageState extends State<MyHomePage> {
                             }).toList(),
                             //dropdownColor: Colors.black, // Dropdown background color
                             underline: SizedBox(), // Remove default underline
+                          ),
+                        ),
+                      ),*/
+                      Expanded(
+                        child: Container(
+                          padding: EdgeInsets.all(8.0),
+                          decoration: BoxDecoration(// Background color
+                            borderRadius: BorderRadius.circular(5.0),
+                            border: Border.all(
+                              color: Colors.black, // Border color
+                              width: 2.0,
+                            ),
+                          ),
+                          child: DropDownTextField(
+                            initialValue: appController.selectedFolder.value.name,
+                            textFieldDecoration: InputDecoration(
+                              border: InputBorder.none
+                            ),
+                            clearOption: false,
+                            textFieldFocusNode: textFieldFocusNode,
+                            searchFocusNode: searchFocusNode,
+                            // searchAutofocus: true,
+                            dropDownItemCount: 10,
+                            searchShowCursor: false,
+                            enableSearch: true,
+                            searchKeyboardType: TextInputType.text,
+                            dropDownList: appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                              return DropDownValueModel(name: value.name!, value: value.id);
+                            }).toList(),
+                            onChanged: (val) {
+                              appController.selectedFolder.value = StreamTapeFolderItem(name:val.name!,id:val.value!)!;
+                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, val.name!);
+                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, val.value!);
+                            },
                           ),
                         ),
                       ),
@@ -589,7 +1057,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                         }, icon: Icon(Icons.refresh),iconSize: 24,) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,))
                                       ),
                                       IconButton(onPressed: () async {
-                                        await appController.deleteRemoteUploadVideo(appController.downloadingList[index]!.id!);
+                                        await appController.showDeleteRemoteUploadingDialog(appController.downloadingList[index]!.id!);
                                       }, icon: Icon(Icons.delete),iconSize: 24,),
                                     ],
                                   ),

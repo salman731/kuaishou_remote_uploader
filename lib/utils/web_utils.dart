@@ -30,9 +30,22 @@ class WebUtils
    }
 
    static Future<String?> makeGetRequest(String url,
-       {Map<String, String>? headers}) async
+       {Map<String, String>? headers,Function(String?)? requestCookieCallBack,Duration? timeout}) async
    {
-     http.Response response = await http.Client().get(Uri.parse(url),headers: headers);
+     late http.Response response;
+     if(timeout != null)
+       {
+         response = await http.Client().get(Uri.parse(url),headers: headers).timeout(timeout!);
+       }
+     else
+       {
+         response = await http.Client().get(Uri.parse(url),headers: headers);
+       }
+
+     if(requestCookieCallBack != null)
+     {
+       requestCookieCallBack(response.headers["location"]);
+     }
      return response.body!;
    }
 
@@ -40,6 +53,7 @@ class WebUtils
        {Map<String, String>? headers}) async
    {
      http.Response response = await http.Client().get(Uri.parse(url),headers: headers);
+
      return response.bodyBytes!;
    }
 
@@ -69,18 +83,23 @@ class WebUtils
      return parser.parse(html);
    }
 
-   static Future<String?> getOriginalUrl(url) async {
-     try {
+   static Future<String?> getOriginalUrl(url,{Map<String,String> headers = const {},Duration? timeout}) async {
+     try { 
        final client = HttpClient();
+       client.connectionTimeout = timeout;
        var uri = Uri.parse(url);
        var request = await client.getUrl(uri);
+       for (MapEntry<String,String> mapEntry in headers.entries)
+         {
+           request.headers.add(mapEntry.key, mapEntry.value);
+         }
        request.followRedirects = false;
        var response = await request.close();
        if(response.isRedirect)
-              {
-                response.drain();
-                return response.headers.value(HttpHeaders.locationHeader);
-              }
+         {
+           await response.drain();
+           return response.headers.value(HttpHeaders.locationHeader);
+         }
        else
          {
            return url;

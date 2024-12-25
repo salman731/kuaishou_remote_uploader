@@ -42,6 +42,7 @@ class DialogUtils
 
       AppController appController = Get.find<AppController>();
       List<UserKuaishou> list = appController.getAllUserList();
+      RxString currentAddedUser = "".obs;
       AlertDialog alert=AlertDialog(
         title: Text("Add User"),
 
@@ -64,16 +65,31 @@ class DialogUtils
                     border: InputBorder.none,
                     suffixIcon: IconButton(
                       onPressed: () async {
-                        String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
-                        await appController.addUsername(username);
-                        list = appController.getAllUserList();
-                        appController.update(["updateUserList"]);
+                        showFollowUnfollowUserDialog(context,onFollow: () async {
+                          String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
+                          await appController.addUsername(username);
+                          list = appController.getAllUserList();
+                          currentAddedUser.value = username;
+                          appController.usernameTextEditingController.clear();
+                          appController.update(["updateUserList"]);
+                        },onUnfollow: () async {
+                          Uri uri = Uri.parse(appController.usernameTextEditingController.text);
+                          await appController.addUsername(uri.path + "<||>UNFOLLOW");
+                          list = appController.getAllUserList();
+                          currentAddedUser.value = uri.path;
+                          appController.usernameTextEditingController.clear();
+                          appController.update(["updateUserList"]);
+                        });
+
                       },
                       icon: Icon(Icons.add),
                     ),
                   ),
                 ),
               ),
+              SizedBox(height: 5,),
+              Obx(()=> Text("Current Added User :" + currentAddedUser.value)),
+              SizedBox(height: 5,),
               GetBuilder<AppController>(
                 id: "updateUserList",
                 builder: (_) {
@@ -126,5 +142,35 @@ class DialogUtils
         },
       );
 
+  }
+
+  static void showFollowUnfollowUserDialog(BuildContext context,{Function? onUnfollow, Function? onFollow}) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Follow or Unfollow'),
+          content: Text('Select type of user....'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                // Handle Unfollow action
+                onUnfollow!();
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: Text('Unfollow'),
+            ),
+            TextButton(
+              onPressed: () {
+                // Handle Follow action
+                onFollow!();
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: Text('Follow'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

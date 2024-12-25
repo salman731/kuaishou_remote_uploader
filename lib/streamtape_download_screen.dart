@@ -1,3 +1,4 @@
+import 'package:dropdown_textfield/dropdown_textfield.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -23,33 +24,77 @@ class StreamtapeDownloadScreen extends StatelessWidget {
           padding: const EdgeInsets.all(8.0),
           child: Column(
             children: [
-              Obx(()=>Center(
-                child: Container(
-                  padding: EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(// Background color
-                    borderRadius: BorderRadius.circular(5.0),
-                    border: Border.all(
-                      color: Colors.black, // Border color
-                      width: 2.0,
-                    ),
+              // Obx(()=>Center(
+              //   child: Container(
+              //     padding: EdgeInsets.all(8.0),
+              //     decoration: BoxDecoration(// Background color
+              //       borderRadius: BorderRadius.circular(5.0),
+              //       border: Border.all(
+              //         color: Colors.black, // Border color
+              //         width: 2.0,
+              //       ),
+              //     ),
+              //     child: DropdownButton<StreamTapeFolderItem>(
+              //       value: appController.selectedDownloadFolder.value,
+              //       //iconEnabledColor: AppColors.red,
+              //       isExpanded: true,
+              //       onChanged: ( newValue) {
+              //         appController.selectedDownloadFolder.value = newValue!;
+              //       },
+              //       items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+              //         return DropdownMenuItem<StreamTapeFolderItem>(
+              //           value: value,
+              //           child: Text("${value.name}"),
+              //         );
+              //       }).toList(),
+              //       //dropdownColor: Colors.black, // Dropdown background color
+              //       underline: SizedBox(), // Remove default underline
+              //     ),
+              //   ),
+              // ),
+              // ),
+              Obx(()=> Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                        //height: 100,
+                        padding: EdgeInsets.all(8.0),
+                        decoration: BoxDecoration(// Background color
+                          borderRadius: BorderRadius.circular(5.0),
+                          border: Border.all(
+                            color: Colors.black, // Border color
+                            width: 2.0,
+                          ),
+                        ),
+                        child: DropDownTextField(
+                          initialValue: appController.selectedDownloadFolder.value.name,
+                          textFieldDecoration: InputDecoration(
+                              border: InputBorder.none
+                          ),
+                          clearOption: false,
+                          // searchAutofocus: true,
+                          dropDownItemCount: 10,
+                          searchShowCursor: false,
+                          enableSearch: true,
+                          searchKeyboardType: TextInputType.text,
+                          dropDownList: appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                            return DropDownValueModel(name: value.name!, value: value.id);
+                          }).toList(),
+                          onChanged: (val) {
+                             appController.selectedDownloadFolder.value = StreamTapeFolderItem(name:val.name!,id:val.value!)!;
+                            // SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, val.name!);
+                            // SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, val.value!);
+                          },
+                        ),
+                      ),
                   ),
-                  child: DropdownButton<StreamTapeFolderItem>(
-                    value: appController.selectedDownloadFolder.value,
-                    //iconEnabledColor: AppColors.red,
-                    isExpanded: true,
-                    onChanged: ( newValue) {
-                      appController.selectedDownloadFolder.value = newValue!;
+                  IconButton(
+                    onPressed: () async {
+                      await appController.getDownloadLinks(appController.selectedDownloadFolder.value.id!);
                     },
-                    items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
-                      return DropdownMenuItem<StreamTapeFolderItem>(
-                        value: value,
-                        child: Text("${value.name}"),
-                      );
-                    }).toList(),
-                    //dropdownColor: Colors.black, // Dropdown background color
-                    underline: SizedBox(), // Remove default underline
-                  ),
-                ),
+                    icon: Icon(Icons.download),
+                  )
+                ],
               ),
               ),
               SizedBox(height: 10,),
@@ -133,15 +178,23 @@ class StreamtapeDownloadScreen extends StatelessWidget {
                               return GestureDetector(
                                 onLongPress: (){
                                   bool value = appController.currentDownloadList.any((item) => item.isSelected!.value == true);
-                                  if (!value) {
+                                  if (!value && appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]) ) {
                                     appController.currentDownloadList[index]!.isSelected!.value = true;
                                   }
+                                  else if(!value &&!appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]))
+                                    {
+                                      appController.showToast("Load stream tape download url first......");
+                                    }
                                   appController.update(["updateCopyFloatingActionButtonVisibility"]);
                                 },
                                 onTap: (){
                                   bool value = appController.currentDownloadList.any((item) => item.isSelected!.value == true);
-                                  if (value) {
+                                  if (value && appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index])) {
                                     appController.currentDownloadList[index]!.isSelected!.value = !appController.currentDownloadList[index]!.isSelected!.value;
+                                  }
+                                  else if(!appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]))
+                                  {
+                                    appController.showToast("Load stream tape download url first......");
                                   }
                                   appController.update(["updateCopyFloatingActionButtonVisibility"]);
                                 },
@@ -177,21 +230,29 @@ class StreamtapeDownloadScreen extends StatelessWidget {
                                           contentPadding: EdgeInsets.all(2),
                                         ),
                                       )),
-                                      Obx(()=> !appController.currentDownloadList[index]!.isLoading!.value ? SizedBox(
+                                      Obx(()=> !appController.currentDownloadList[index]!.isLoading!.value ?  SizedBox(
                                         height: 28,
                                         width: 28,
                                         child: IconButton(onPressed: () async {
                                               await appController.fetchStreamTapeImageAndDownloadUrl(appController.currentDownloadList[index]);
                                               appController.update(["updateCopyFloatingActionButtonVisibility"]);
-                                          }, icon: Icon(Icons.download),iconSize: 20,),
+                                          }, icon: appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]) ? Icon(Icons.refresh) :Icon(Icons.download),iconSize: 20,),
                                       ) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,)),
                                       ),
                                       SizedBox(
                                         height: 28,
                                         width: 28,
                                         child: IconButton(onPressed: () async {
-                                          await Clipboard.setData(ClipboardData(text: appController.currentDownloadList[index]!.downloadUrl!));
-                                          appController.showToast("Copied.....");
+                                          if(appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]))
+                                            {
+                                              await Clipboard.setData(ClipboardData(text: appController.currentDownloadList[index]!.downloadUrl!));
+                                              appController.showToast("Copied.....");
+                                            }
+                                          else
+                                            {
+                                              appController.showToast("Unable to get link.....");
+                                            }
+
                                         }, icon: Icon(Icons.copy),iconSize: 20),
                                       ),
                                     ],
@@ -233,7 +294,7 @@ class StreamtapeDownloadScreen extends StatelessWidget {
           GetBuilder<AppController>(
               id: "updateCopyFloatingActionButtonVisibility",
               builder:(_){
-                bool value = appController.currentDownloadList!.any((item) => item.isSelected!.value == true && item.downloadUrl != "Press Download icon to get link....");
+                bool value = appController.currentDownloadList!.any((item) => item.isSelected!.value == true);
                 if(value)
                 {
                   return getCopyFloatingActionButtion();
@@ -243,14 +304,14 @@ class StreamtapeDownloadScreen extends StatelessWidget {
                   return SizedBox.shrink();
                 }
               } ),
-          SizedBox(height: 10,),
-          FloatingActionButton(
-            onPressed: () async  {
-              await appController.getDownloadLinks(appController.selectedDownloadFolder.value.id!);
-            },
-            tooltip: 'Upload',
-            child: const Icon(Icons.download),
-          )
+          // SizedBox(height: 10,),
+          // FloatingActionButton(
+          //   onPressed: () async  {
+          //
+          //   },
+          //   tooltip: 'Upload',
+          //   child: const Icon(Icons.download),
+          // )
         ],
       ),
     );
@@ -263,7 +324,7 @@ class StreamtapeDownloadScreen extends StatelessWidget {
         StringBuffer linksBuffer = StringBuffer("");
         for(DownloadItem downloadItem in appController.currentDownloadList)
         {
-          if(downloadItem.isSelected!.value && downloadItem.downloadUrl!.isNotEmpty && downloadItem.downloadUrl! != "Press Download icon to get link....")
+          if(downloadItem.isSelected!.value)
           {
             linksBuffer.write(downloadItem.downloadUrl! + "\n\n");
           }
