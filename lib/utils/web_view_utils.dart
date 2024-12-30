@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
+import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 
 class WebViewUtils
 {
@@ -16,6 +17,7 @@ class WebViewUtils
    Completer? videoLinkCompleter;
    String? finalUrl;
    Timer? timer;
+   late InAppWebViewController inAppWebViewController;
 
   Future<String> getUrlWithWebView(String urlo,String urlExtension,{Map<String,String>? header,bool isBackground = false}) async
   {
@@ -28,7 +30,10 @@ class WebViewUtils
     headlessWebView = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(urlo),headers: header),
       initialSize: Size(1366,768),
-
+      onWebViewCreated:(controller)
+      {
+        inAppWebViewController = controller;
+      },
       onLoadStart: (controller,url) async {
         print(url!.rawValue!);
       },
@@ -75,10 +80,11 @@ class WebViewUtils
      timer = Timer(Duration(seconds: 40),(){
        videoLinkCompleter!.complete();
      });
-     await CookieManager.instance().deleteAllCookies();
      WebView = InAppWebView(
        initialUrlRequest: URLRequest(url: WebUri(urlo),headers: header),
-
+       onWebViewCreated: (controller){
+         inAppWebViewController = controller;
+       },
        onLoadStart: (controller,url) async {
          print(url!.rawValue!);
        },
@@ -93,7 +99,7 @@ class WebViewUtils
        onConsoleMessage: (controller, consoleMessage) {
        },
 
-       initialSettings: InAppWebViewSettings(isInspectable: false,useShouldInterceptRequest: !isBackground,useShouldOverrideUrlLoading: !isBackground,preferredContentMode: UserPreferredContentMode.MOBILE,),
+       initialSettings: InAppWebViewSettings(isInspectable: false,useShouldInterceptRequest: !isBackground,useShouldOverrideUrlLoading: !isBackground,preferredContentMode: UserPreferredContentMode.MOBILE,incognito: true,/*userAgent: "Mozilla/5.0 (Linux; Android 14; SM-A536B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.231 Mobile Safari/537.36	"*/),
        shouldInterceptRequest: !isBackground ? (controller,request) async
        {
          Get.find<AppController>().logText  += "url: ${request.url.origin}\n";
@@ -107,10 +113,19 @@ class WebViewUtils
            }
          }
        } : null,
+       shouldOverrideUrlLoading: (controller,navigation) async {
+         return NavigationActionPolicy.ALLOW;
+       },
 
      );
      AlertDialog alert=AlertDialog(
-       content: WebView
+       content: WebView,
+       actions: [
+         IconButton(onPressed: () async {
+           var result = await inAppWebViewController.evaluateJavascript(source: "document.cookie");
+           SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, result.toString().split(";")[0]);
+         }, icon: Icon(Icons.add))
+       ],
      );
      showDialog(context: Get.context!, builder: (_){
        return alert;

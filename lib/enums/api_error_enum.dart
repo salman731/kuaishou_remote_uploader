@@ -1,0 +1,11 @@
+
+
+enum ApiErrorEnum
+{
+  NONE,
+  CAPTCHA_REQUIRED,
+  FREQUENT_REQUESTS,
+  EXCEPTION,
+  OFFLINE,
+  OTHERS
+}

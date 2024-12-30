@@ -118,8 +118,8 @@ int getIntBetweenRange(int min, int max)
 
 Timer makePeriodicTimer(
     Duration duration,
-    void Function(Timer? timer) callback, {List<Duration>? timeSpecificDuration,bool fireNow = false, bool isCustomTimer = false,}) {
-  Timer timer = isCustomTimer ? launchTimer(duration,timeSpecificDuration!,callback: callback) : Timer.periodic(duration, callback);
+    void Function(Timer? timer) callback, {List<Duration>? timeSpecificDuration,bool fireNow = false, bool isCustomTimer = false,bool isUnfollowTimer = false}) {
+  Timer timer = isCustomTimer ? isUnfollowTimer ? unfollowLaunchTimer(duration, callback: callback) : launchTimer(duration,timeSpecificDuration!,callback: callback) : Timer.periodic(duration, callback);
   if (fireNow) {
     callback(timer);
   }
@@ -147,7 +147,6 @@ Timer launchTimer(Duration duration,List<Duration> timeSpecificDurationList,{ re
   return Timer(duration, () {
 
     callback(null);
-    int variableTime = getIntBetweenRange(-2,3);
     if(isBetweenTime(0,5)) // Midnight
       {
         launchTimer(timeSpecificDurationList[0],timeSpecificDurationList,callback: callback);
@@ -162,6 +161,31 @@ Timer launchTimer(Duration duration,List<Duration> timeSpecificDurationList,{ re
       }
 
   });
+}
+
+Timer unfollowLaunchTimer(Duration duration,{ required Function callback})
+{
+  return Timer(duration, () {
+
+      List<UserKuaishou> list = Get.find<AppController>().getAllUserList();
+      List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+      int totalMin = getUnfollowMin(listFiltered);
+      SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN, totalMin);
+      Get.find<AppController>().unfollowCurrentTime.value = totalMin;
+      callback(null);
+      unfollowLaunchTimer(Duration(minutes: totalMin),callback: callback);
+
+
+  });
+}
+
+int getUnfollowMin(List<UserKuaishou> userList)
+{
+  int userListSize = userList.length;
+  int randomMin = getIntBetweenRange(9, 14);
+  int totalminPerUser = ((userListSize * getIntBetweenRange(35,40)) / 60).ceil() ;
+  int totalMin = totalminPerUser + randomMin;
+  return totalMin;
 }
 
 Future<void> showNotification({required String title,required String content}) async
@@ -415,6 +439,11 @@ class _MyHomePageState extends State<MyHomePage> {
           onResume: () async {
             if (previousState!= null && !appController.isDownloadStatusUpdating.value) {
               await SharedPrefsUtil.reloadSharedPreferences();
+              if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty)
+                {
+                  WebViewUtils webViewUtils = WebViewUtils();
+                  webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
+                }
               if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED,defaultValue: false))
                 {
                   await appController.getFolderList();
@@ -507,7 +536,8 @@ class _MyHomePageState extends State<MyHomePage> {
                   {
                 case "refresh":
                   //WebViewUtils webViewUtils = WebViewUtils();
-                  //webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/liazi222222", ".flv");
+                  //String? oLink = await WebUtils.getOriginalUrl("https://v.kuaishou.com/9rBZxQ");
+                  //webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
                   await appController.showReauthenticateStreamtapeDialog();
                   //await appController.getLiveUserList();
                   // var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
@@ -716,30 +746,33 @@ class _MyHomePageState extends State<MyHomePage> {
                 child: Obx(()=> Column(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    Text((appController.isUnfollowUserProcessing.value ? "Unfollow User Uploading in Progress....." :"Unfollow User Background Timer Interval Duration (${appController.unfollowUserIntervalSliderValue.value} min)") + " " + appController.unfollowUploadRemainingTime.value),
+                    Text((appController.isUnfollowUserProcessing.value ? "Unfollow User Uploading in Progress (Interval Duration : ${appController.unfollowCurrentTime.value} min)" :"Unfollow User Background Timer (Interval Duration : ${appController.unfollowCurrentTime.value} min)") + " " + appController.unfollowUploadRemainingTime.value),
                     Text("Total Unfollowed User : ${appController.totalUnfollowUserUploadedProgress.value}",style: TextStyle(color: Colors.purpleAccent),),
                     Text("User Uploaded : ${appController.unfollowUserUploaded.value}",style: TextStyle(color: Colors.green),),
-                    Text("User Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
-                    // Text("Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
-                    // Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
-                    Opacity(
-                      opacity: appController.isUnfollowUserProcessing.value ? 0.5 : 1,
-                      child: Slider(
-                          value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
-                          max: 100,
-                          min: 1,
-                          divisions: 100,
-                          label: appController.unfollowUserIntervalSliderValue.toString(),
-                          onChanged: !appController.isUnfollowUserProcessing.value ?  (double value) {
-                            appController.unfollowUserIntervalSliderValue.value = value.toInt();
-                          } : null,
-                          onChangeEnd: (value) async {
-                            SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
-                            await appController.uploadUnfollowUserWithWebView(value.toInt());
-
-                          }
-                      ),
-                    ),
+                    Text("Users Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
+                    Text("Users Offline : ${appController.unfollowUserOffline.value}",style: TextStyle(color: Colors.orange),),
+                    Text("Execption Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
+                    Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
+                    Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
+                    Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
+                    // Opacity(
+                    //   opacity: appController.isUnfollowUserProcessing.value ? 0.5 : 1,
+                    //   child: Slider(
+                    //       value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
+                    //       max: 100,
+                    //       min: 1,
+                    //       divisions: 100,
+                    //       label: appController.unfollowUserIntervalSliderValue.toString(),
+                    //       onChanged: !appController.isUnfollowUserProcessing.value ?  (double value) {
+                    //         appController.unfollowUserIntervalSliderValue.value = value.toInt();
+                    //       } : null,
+                    //       onChangeEnd: (value) async {
+                    //         SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
+                    //         await appController.uploadUnfollowUserWithWebView(value.toInt());
+                    //
+                    //       }
+                    //   ),
+                    // ),
                   ],)),
               )
             ],
@@ -1027,7 +1060,6 @@ class _MyHomePageState extends State<MyHomePage> {
                               controller: appController.scrollController,
                               itemCount: appController.downloadingList.length,
                               itemBuilder: (context,index){
-
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 10),
                                   child: Row(
@@ -1063,6 +1095,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                       IconButton(onPressed: () async {
                                         await appController.showDeleteRemoteUploadingDialog(appController.downloadingList[index]!.id!);
                                       }, icon: Icon(Icons.delete),iconSize: 24,),
+                                      appController.downloadingList[index]!.isUnfollowUser! ? Container(width: 12,height: 12,decoration: BoxDecoration(color:Colors.green,shape: BoxShape.circle),) : SizedBox.shrink(),
+
                                     ],
                                   ),
                                 );

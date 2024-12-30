@@ -16,6 +16,8 @@ class StreamtapeDownloadStatus
 
   RxBool? isThumbnailUpdating;
 
-  StreamtapeDownloadStatus({this.status,this.url,this.imageBytes,this.id,this.isThumbnailUpdating});
+  bool? isUnfollowUser;
+
+  StreamtapeDownloadStatus({this.status,this.url,this.imageBytes,this.id,this.isThumbnailUpdating,this.isUnfollowUser});
 
 }

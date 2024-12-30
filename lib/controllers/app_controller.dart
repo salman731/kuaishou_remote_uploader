@@ -25,6 +25,7 @@ import 'package:hive/hive.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html_unescape/html_unescape.dart';
 import 'package:kuaishou_remote_uploader/dialogs/dialog_utils.dart';
+import 'package:kuaishou_remote_uploader/enums/api_error_enum.dart';
 import 'package:kuaishou_remote_uploader/enums/background_mode_time_enum.dart';
 import 'package:kuaishou_remote_uploader/main.dart';
 import 'package:kuaishou_remote_uploader/models/download_item.dart';
@@ -58,10 +59,11 @@ class   AppController extends GetxController {
   String KOUAISHOU_LIVE_API_URL_2 = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
   String KOUAISHOU_LIVE_API_URL_3 = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=UNKNOWN_PLATFORM&captchaToken=";
   String KOUAISHOU_LIVE_API_URL_4 = "https://v.m.chenzhongtech.com/rest/k/live/byUser?kpn=KUAISHOU&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
-  String KOUAISHOU_LIVE_API_URL_5 = "https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=UNKNOWN_PLATFORM&captchaToken=";
+  String KOUAISHOU_LIVE_API_URL_5 = "https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=UNKNOWN_PLATFORM&captchaToken=HEADCgp6dC5jYXB0Y2hhEtMCFJNAWpBNdfMfdnHcCLEyper4lASo9foKIFLNtFTVR_sF6Iafj4fRatV5JSV5JH0vjmIgk97FCjcpSJq42DGH4rdJ0ZllRH1hD-ny_EPyyyTjCURt-UqB8en6q8ll0K5TjY9K09l6_OkjyxX9CVFWkhY_--a9hm3Ay_Uf_iHLrn8_VcKfEHZmxnj7Oh--BoESFnHvVGxFn9TGLKKIozIdafTNtuFFtxY4__UrDLnZGYHQrA6CevqttA5WqE7YQvwXEz_Y7EtIIalOCFxtirZPgOiMQ425gw3XjZzDjQRwYdOge4sJO83maNTVsmX_sgBYETZxOuWmUhSglSGY67ygVPk6B1NwNLH3jesmph4VNGJM6rbi0yWbOtd2yLNWxr-HICvglWV4oDbrN-cczkrYCoYDyjTXRP62iK8x3wnuOrGKTXM_vEymib0kHp8AuGb35oj9GhJxat9v18_vGhz0w0fGzFHTlSooBTACTAIL";
   String KOUAISHOU_MAIN_MOBILE_URL = "https://livev.m.chenzhongtech.com/fw/live/";
   String KOUAISHOU_LIVE_FOLLOW_API = "https://live.kuaishou.com/live_api/follow/living";
   String KOUAISHOU_USER_API = "https://live.kuaishou.com/live_api/profile/public?count=4&pcursor=&principalId=s14042236&hasMore=true";
+  String HTTPIE_PROXY_URL = "https://httpie.io/app/api/proxy";
 
   HeadlessInAppWebView? headlessInAppWebView;
   InAppWebViewController? inAppWebViewController;
@@ -84,6 +86,7 @@ class   AppController extends GetxController {
   Completer downloadingCompleter = Completer();
   late Box downloadingListIdBox;
   late Box usernameListIdBox;
+  late Box unfollowUserUrlListBox;
 
   ScrollController scrollController = ScrollController();
 
@@ -104,6 +107,7 @@ class   AppController extends GetxController {
   RxDouble morningAfterNoonSliderValue = 1.0.obs;
   RxDouble eveningNightSliderValue = 1.0.obs; //
   RxInt unfollowUserIntervalSliderValue = 1.obs; //
+  RxInt unfollowCurrentTime = 1.obs; //
   Timer? backgroundModeTimer;
   RxBool isSliderEnable = true.obs;
   Rx<BackgroundModeTimeEnum> backgroundModeTimeEnumRadioValue = BackgroundModeTimeEnum.ALLTIME.obs;
@@ -119,6 +123,9 @@ class   AppController extends GetxController {
   RxInt unfollowUserOnline = 0.obs;
   RxInt unfollowUserErrorCaptcha = 0.obs;
   RxInt unfollowUserError = 0.obs;
+  RxInt unfollowUserFrequentRequests = 0.obs;
+  RxInt unfollowUserOthers = 0.obs;
+  RxInt unfollowUserOffline = 0.obs;
 
   /* initTimer()
   {
@@ -143,6 +150,7 @@ class   AppController extends GetxController {
     unfollowUserIntervalSliderValue.value = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, defaultValue: 15); // 4:00 PM -> 12:00 AM
     downloadingListIdBox = await Hive.openBox("downloadingListId");
     usernameListIdBox = await Hive.openBox("usernameListIdBox");
+    unfollowUserUrlListBox = await Hive.openBox("unfollowUserUrlListBox");
     String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
     String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
     // if(isRefresh)
@@ -386,7 +394,7 @@ class   AppController extends GetxController {
   Future<bool> remoteUploadStreamTape(String url, String folder, {bool isBackGroundProcess = false}) async
   {
     try {
-      if (!isConcurrentProcessing.value) {
+      if (!isConcurrentProcessing.value && !isBackGroundProcess) {
         showToast("Uploading to Streamtape .....");
       }
       if (isBackGroundProcess) {
@@ -476,10 +484,10 @@ class   AppController extends GetxController {
     return finalFlvUrl;
   }
 
-  Future<(String,String)> getDirectKuaishouFlvUrlOrginal (String kuaishouLink,String did) async
+  Future<(String,ApiErrorEnum)> getDirectKuaishouFlvUrlOrginal (String kuaishouLink,String did) async
   {
     String finalFlvUrl = "";
-    String error = "";
+    ApiErrorEnum error = ApiErrorEnum.NONE;
     try {
       String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink);
       Uri orginalUri = Uri.parse(orginalLink!);
@@ -487,24 +495,59 @@ class   AppController extends GetxController {
       String? efid = orginalUri.queryParameters["efid"];
       var requestMap = {"efid":efid,"eid":eid,"source":6,"shareMethod":"card","clientType":"WEB_OUTSIDE_SHARE_H5"};
       int currentTimeInMillis = DateTime.now().millisecondsSinceEpoch;
-      var headers = {"Referer":orginalLink,"Cookie":"did=${did}; didv=${currentTimeInMillis}","Content-Type":"application/json"};
-      String response = await WebUtils.makePostRequest(KOUAISHOU_LIVE_API_URL_5, jsonEncode(requestMap),headers: headers);
+      var headers = {"Referer":orginalLink,"Cookie":"${did}","Content-Type":"application/json"};
+      // var headers2 = {
+      // "Content-Type": "application/json",
+      // "Cookie": "did=$did",
+      // "Host": orginalUri.origin,
+      // "Referer": orginalLink,
+      // "User-Agent": "HTTPie"};
+      var headersHttpie = {
+        'content-type': 'text/plain;charset=UTF-8',
+        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'x-pie-req-header-content-type': 'application/json',
+        'x-pie-req-header-cookie': '${did}',
+        'x-pie-req-header-host': orginalUri.origin.replaceAll("https://", ""),
+        'x-pie-req-header-referer': orginalLink,
+        'x-pie-req-header-user-agent': 'HTTPie',
+        'x-pie-req-meta-follow-redirects': 'true',
+        'x-pie-req-meta-method': 'POST',
+        'x-pie-req-meta-ssl-verify': 'true',
+        'x-pie-req-meta-url': 'https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=UNKNOWN_PLATFORM&captchaToken=HEADCgp6dC5jYXB0Y2hhEtMCFJNAWpBNdfMfdnHcCLEyper4lASo9foKIFLNtFTVR_sF6Iafj4fRatV5JSV5JH0vjmIgk97FCjcpSJq42DGH4rdJ0ZllRH1hD-ny_EPyyyTjCURt-UqB8en6q8ll0K5TjY9K09l6_OkjyxX9CVFWkhY_--a9hm3Ay_Uf_iHLrn8_VcKfEHZmxnj7Oh--BoESFnHvVGxFn9TGLKKIozIdafTNtuFFtxY4__UrDLnZGYHQrA6CevqttA5WqE7YQvwXEz_Y7EtIIalOCFxtirZPgOiMQ425gw3XjZzDjQRwYdOge4sJO83maNTVsmX_sgBYETZxOuWmUhSglSGY67ygVPk6B1NwNLH3jesmph4VNGJM6rbi0yWbOtd2yLNWxr-HICvglWV4oDbrN-cczkrYCoYDyjTXRP62iK8x3wnuOrGKTXM_vEymib0kHp8AuGb35oj9GhJxat9v18_vGhz0w0fGzFHTlSooBTACTAIL'
+      };
+      String response = await WebUtils.makePostRequest(HTTPIE_PROXY_URL, jsonEncode(requestMap),headers: headersHttpie);
       Map<String,dynamic> jsonResponse = json.decode(response);
       if (jsonResponse["result"] == 1) {
         finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"];
-        if (jsonResponse["liveStreamEndReason"] != null && jsonResponse["liveStreamEndReason"] == "The Live ended.") {
+        if (jsonResponse["liveStreamEndReason"] != null) {
               finalFlvUrl = "";
+              error = ApiErrorEnum.OFFLINE;
             }
+      }
+      else if (jsonResponse["result"] == 2)
+        {
+          error = ApiErrorEnum.FREQUENT_REQUESTS;
+        }
+      else if (jsonResponse["result"] == 2214)
+      {
+        error = ApiErrorEnum.OFFLINE;
       }
       else
         {
           if(jsonResponse["result"] == 2001 && jsonResponse["captchaConfig"] != null)
             {
-              error = "CAPTCHA REQUIRED";
+              error = ApiErrorEnum.CAPTCHA_REQUIRED;
+            }
+          else
+            {
+              error = ApiErrorEnum.OTHERS;
             }
         }
     } catch (e) {
-      error = "#ERROR# : ${e.toString()}";
+      error = ApiErrorEnum.EXCEPTION;
     }
     return (finalFlvUrl,error);
 
@@ -760,9 +803,12 @@ class   AppController extends GetxController {
     }
   }
 
-  Future<bool> startUploading_background(String link, List<StreamtapeDownloadStatus> list) async
+  Future<bool> startUploading_background(String link, List<StreamtapeDownloadStatus> list,{bool isUnfollow = false}) async
   {
     if (!isUrlExistsInDownlodingList(link, list, isBackground: true)) {
+      if (isUnfollow) {
+        addUnfollowUsername(link);
+      }
       await remoteUploadStreamTape(link!, SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID), isBackGroundProcess: true);
       await Future.delayed(Duration(seconds: getIntBetweenRange(1, 3)));
       return true;
@@ -833,15 +879,18 @@ class   AppController extends GetxController {
               bytes = getDownloadingLinkId(item["id"]);
             }
           }
+          bool isUnfollowUser = isUrlExistInUnfollowUserListBox(item["url"]);
           downloadingList.add(StreamtapeDownloadStatus(status: item["status"],
               url: item["url"],
               imageBytes: bytes,
               id: item["id"],
+              isUnfollowUser: isUnfollowUser,
               isThumbnailUpdating: false.obs));
 
           this.update(["updateDownloadingList"]);
         }
         await deleteAllExcept(downloadingListIdBox, downloadingList.map((value) => value.id).toList());
+        //await deleteAllExcept(unfollowUserUrlListBox, downloadingList.map((value) => value.url).toList());
       } else {
         // For removing links
         //if (downloadingList.length > list.length) {
@@ -876,10 +925,12 @@ class   AppController extends GetxController {
                 bytes = getDownloadingLinkId(item["id"]);
               }
             }
+            bool isUnfollowUser = isUrlExistInUnfollowUserListBox(item["url"]);
             downloadingList.add(StreamtapeDownloadStatus(status: item["status"],
                 url: item["url"],
                 imageBytes: bytes,
                 id: item["id"],
+                isUnfollowUser: isUnfollowUser,
                 isThumbnailUpdating: false.obs));
 
             this.update(["updateDownloadingList"]);
@@ -918,6 +969,7 @@ class   AppController extends GetxController {
         downloadingList.addAll(downloadingListFuture);
         this.update(["updateDownloadingList"]);
         await deleteAllExcept(downloadingListIdBox, downloadingList.map((value) => value.id).toList());
+        //await deleteAllExcept(unfollowUserUrlListBox, downloadingList.map((value) => value.url).toList());
       } else {
         // For removing links
         //if (downloadingList.length > list.length) {
@@ -1093,10 +1145,12 @@ class   AppController extends GetxController {
         bytes = getDownloadingLinkId(item["id"]);
       }
     }
+    bool isUnfollowUser = isUrlExistInUnfollowUserListBox(item["url"]);
     return StreamtapeDownloadStatus(status: item["status"],
         url: item["url"],
         imageBytes: bytes,
         id: item["id"],
+        isUnfollowUser: isUnfollowUser,
         isThumbnailUpdating: false.obs);
   }
 
@@ -1284,6 +1338,17 @@ class   AppController extends GetxController {
     }
   }
 
+  Future addUnfollowUsername(String url) async
+  {
+    if (!unfollowUserUrlListBox.values.toList().any((value) => value.toString().contains(url))) {
+      await unfollowUserUrlListBox.put(generateRandomString(10), url);
+    }
+  }
+
+  bool isUrlExistInUnfollowUserListBox(String url)
+  {
+    return unfollowUserUrlListBox.values.toList().any((value) => value.toString().contains(url));
+  }
 
   Future<List<StreamtapeDownloadStatus>> getRemoteDownloadingStatus_background() async
   {
@@ -1452,74 +1517,99 @@ class   AppController extends GetxController {
         stopwatch.onStopTimer();
       }
     unfollowUserStopwatch = [];
-    unfollowUserTimer = makePeriodicTimer(Duration(minutes: min),fireNow: true,(timer) async {
-      final stopWatchTimer = StopWatchTimer(
-          mode: StopWatchMode.countDown,
-          presetMillisecond: StopWatchTimer.getMilliSecFromMinute(min), // millisecond => minute.
-          onChangeRawSecond: (value) async {
-            unfollowUploadRemainingTime.value = "Next in : ${formatTime(value)}";
-          }
-      );
-      stopWatchTimer.onStartTimer();
-      unfollowUserStopwatch.add(stopWatchTimer);
-      isUnfollowUserProcessing.value = true;
-      List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await getRemoteDownloadingStatus_background();
-      List<UserKuaishou> list = getAllUserList();
-      unfollowUserUploaded.value = 0;
-      unfollowUserOnline.value = 0;
-      unfollowUserError.value = 0;
-      unfollowUserErrorCaptcha.value = 0;
-      List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
-      totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
-      for (UserKuaishou userKuaishou in listFiltered) {
-          try {
-            String initialUrl = "https://v.kuaishou.com${userKuaishou.value!.replaceAll("<||>UNFOLLOW", "")}";
-            String url = await getFlvUrlfromKuaihsouLink(initialUrl);
-            if (url.isNotEmpty) {
-              unfollowUserOnline.value  = unfollowUserOnline.value + 1;
-              bool isUploaded = await startUploading_background(url, streamTapeDownloadStatusList);
-              if(isUploaded)
-              {
-                unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
-              }
+    List<UserKuaishou> list = getAllUserList();
+    List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+    if (listFiltered.length > 0) {
+      int totalMin = getUnfollowMin(listFiltered);
+      SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,totalMin);
+      unfollowCurrentTime.value = totalMin;
+      unfollowUserTimer = makePeriodicTimer(Duration(minutes: totalMin),fireNow: true,isCustomTimer: true,isUnfollowTimer: true,(timer) async {
+        final stopWatchTimer = StopWatchTimer(
+            mode: StopWatchMode.countDown,
+            presetMillisecond: StopWatchTimer.getMilliSecFromMinute(SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,)), // millisecond => minute.
+            onChangeRawSecond: (value) async {
+              unfollowUploadRemainingTime.value = "Next in : ${formatTime(value)}";
             }
-          } catch (e) {
-            print(e);
-          }
-          totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
-          await Future.delayed(Duration(seconds: getIntBetweenRange(20, 30)));
+        );
+        stopWatchTimer.onStartTimer();
+        unfollowUserStopwatch.add(stopWatchTimer);
+        isUnfollowUserProcessing.value = true;
+        List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await getRemoteDownloadingStatus_background();
+        unfollowUserUploaded.value = 0;
+        unfollowUserOnline.value = 0;
+        unfollowUserError.value = 0;
+        unfollowUserErrorCaptcha.value = 0;
+        unfollowUserFrequentRequests.value = 0;
+        unfollowUserOthers.value = 0;
+        unfollowUserOffline.value = 0;
+        totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
+        for (UserKuaishou userKuaishou in listFiltered) {
+            try {
+              String initialUrl = "https://v.kuaishou.com${userKuaishou.value!.replaceAll("<||>UNFOLLOW", "")}";
+            //   String url = await getFlvUrlfromKuaihsouLink(initialUrl);
+            //   if (url.isNotEmpty) {
+            //     unfollowUserOnline.value  = unfollowUserOnline.value + 1;
+            //     bool isUploaded = await startUploading_background(url, streamTapeDownloadStatusList);
+            //     if(isUploaded)
+            //     {
+            //       unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
+            //     }
+            //   }
+            // } catch (e) {
+            //   print(e);
+            // }
+            // totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
+            // await Future.delayed(Duration(seconds: getIntBetweenRange(20, 30)));
+              //List<String> cookie = ["web_907321761e6e4eff96111b476bc9cad4","web_5db7f4c0d9664902af774fd08ebdf769","web_618d6ac474dd404a998cf2b641d96843"];
+              String cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
+              bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
+              if (cookie.isNotEmpty && !isCaptchaRequired) {
+                (String,ApiErrorEnum) urlError = await getDirectKuaishouFlvUrlOrginal(initialUrl,cookie);
+                if (urlError.$2 == ApiErrorEnum.NONE) {
+                  if (urlError.$1.isNotEmpty) {
+                     unfollowUserOnline.value  = unfollowUserOnline.value + 1;
+                     bool isUploaded = await startUploading_background(urlError.$1, streamTapeDownloadStatusList,isUnfollow: true);
+                     if(isUploaded)
+                       {
+                         unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
+                       }
+                   }
+                }
+                else
+                  {
+                    if(urlError.$2 == ApiErrorEnum.CAPTCHA_REQUIRED)
+                      {
+                        unfollowUserErrorCaptcha.value = unfollowUserErrorCaptcha.value + 1;
+                        SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, true);
+                      }
+                    else if(urlError.$2 == ApiErrorEnum.EXCEPTION)
+                      {
+                        unfollowUserError.value = unfollowUserError.value + 1;
+                      }
+                    else if(urlError.$2 == ApiErrorEnum.FREQUENT_REQUESTS)
+                      {
+                        unfollowUserFrequentRequests.value = unfollowUserFrequentRequests.value + 1;
+                      }
+                      else if(urlError.$2 == ApiErrorEnum.OTHERS)
+                      {
+                        unfollowUserOthers.value = unfollowUserOthers.value + 1;
+                      }
+                      else if(urlError.$2 == ApiErrorEnum.OFFLINE)
+                      {
+                        unfollowUserOffline.value = unfollowUserOffline.value + 1;
+                      }
+                  }
+              }
+            } catch (e) {
+              print(e);
+            }
+            totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
+            await Future.delayed(Duration(seconds: getIntBetweenRange(35, 40)));
 
-          //   (String,String) urlError = await getDirectKuaishouFlvUrlOrginal(initialUrl,"web_7b5ad32ebac046488ef1a1c65cdc80f3");
-          //   if (urlError.$2.isEmpty) {
-          //     if (urlError.$1.isNotEmpty) {
-          //        unfollowUserOnline.value  = unfollowUserOnline.value + 1;
-          //        bool isUploaded = await startUploading_background(urlError.$1, streamTapeDownloadStatusList);
-          //        if(isUploaded)
-          //          {
-          //            unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
-          //          }
-          //      }
-          //   }
-          //   else
-          //     {
-          //       if(urlError.$2 == "CAPTCHA REQUIRED")
-          //         {
-          //           unfollowUserErrorCaptcha.value = unfollowUserErrorCaptcha.value + 1;
-          //         }
-          //       else
-          //         {
-          //           unfollowUserError.value = unfollowUserError.value + 1;
-          //         }
-          //     }
-          // } catch (e) {
-          //   print(e);
-          // }
-          // totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
-          // await Future.delayed(Duration(seconds: getIntBetweenRange(30, 40)));
-
-      }
-      isUnfollowUserProcessing.value = false;
-    });
+        }
+        isUnfollowUserProcessing.value = false;
+      });
+    }
   }
 
 
