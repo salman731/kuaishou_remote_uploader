@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
+import 'package:kuaishou_remote_uploader/main.dart';
 import 'package:kuaishou_remote_uploader/models/user_kuaishou.dart';
 
 class DialogUtils
@@ -42,6 +43,7 @@ class DialogUtils
 
       AppController appController = Get.find<AppController>();
       List<UserKuaishou> list = appController.getAllUserList();
+      bool isNeedToStartService = list.length ==0;
       RxString currentAddedUser = "".obs;
       AlertDialog alert=AlertDialog(
         title: Text("Add User"),
@@ -49,6 +51,45 @@ class DialogUtils
         content: SingleChildScrollView(
           child: new Column(
             children: [
+              // Container(
+              //   padding: EdgeInsets.all(8.0),
+              //   decoration: BoxDecoration(// Background color
+              //     borderRadius: BorderRadius.circular(5.0),
+              //     border: Border.all(
+              //       color: Colors.black, // Border color
+              //       width: 2.0,
+              //     ),
+              //   ), //     <-- TextField expands to this height.
+              //   child: TextField(
+              //     controller: appController.usernameTextEditingController,
+              //     decoration: InputDecoration(
+              //       hintText: "Enter Url e.g (http://v.kuaishou.com/xhjfjahf)",
+              //       border: InputBorder.none,
+              //       suffixIcon: IconButton(
+              //         onPressed: () async {
+              //           showFollowUnfollowUserDialog(context,onFollow: () async {
+              //             String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
+              //             await appController.deleteUserByValue(username);
+              //             list = appController.getAllUserList();
+              //             currentAddedUser.value = username;
+              //             appController.usernameTextEditingController.clear();
+              //             appController.update(["updateUserList"]);
+              //           },onUnfollow: () async {
+              //             Uri uri = Uri.parse(appController.usernameTextEditingController.text);
+              //             await appController.deleteUserByValue(uri.path + "<||>UNFOLLOW");
+              //             list = appController.getAllUserList();
+              //             currentAddedUser.value = uri.path;
+              //             appController.usernameTextEditingController.clear();
+              //             appController.update(["updateUserList"]);
+              //           });
+              //
+              //         },
+              //         icon: Icon(Icons.add),
+              //       ),
+              //     ),
+              //   ),
+              // ),
+              // SizedBox(height: 5,),
               Container(
                 padding: EdgeInsets.all(8.0),
                 decoration: BoxDecoration(// Background color
@@ -63,31 +104,83 @@ class DialogUtils
                   decoration: InputDecoration(
                     hintText: "Enter Url e.g (http://v.kuaishou.com/xhjfjahf)",
                     border: InputBorder.none,
-                    suffixIcon: IconButton(
-                      onPressed: () async {
-                        showFollowUnfollowUserDialog(context,onFollow: () async {
-                          String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
-                          await appController.addUsername(username);
-                          list = appController.getAllUserList();
-                          currentAddedUser.value = username;
-                          appController.usernameTextEditingController.clear();
-                          appController.update(["updateUserList"]);
-                        },onUnfollow: () async {
-                          Uri uri = Uri.parse(appController.usernameTextEditingController.text);
-                          await appController.addUsername(uri.path + "<||>UNFOLLOW");
-                          list = appController.getAllUserList();
-                          currentAddedUser.value = uri.path;
-                          appController.usernameTextEditingController.clear();
-                          appController.update(["updateUserList"]);
-                        });
+                    suffixIcon: SizedBox(
+                      width: 100,
+                      child: Row(children: [
+                        IconButton(
+                          onPressed: () async {
+                            showFollowUnfollowUserDialog(context,onFollow: () async {
+                              appController.showDeleteDialog(() async {
+                                showLoaderDialog(Get.context!,text: "Deleting....");
+                                String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
+                                await appController.deleteUserByValue(username);
+                                list = appController.getAllUserList();
+                                currentAddedUser.value = username;
+                                appController.usernameTextEditingController.clear();
+                                appController.update(["updateUserList"]);
+                                await appController.saveListToFile(isSilent: true);
+                                stopLoaderDialog();
+                              });
+                            },onUnfollow: () async {
+                              appController.showDeleteDialog(() async {
+                                showLoaderDialog(Get.context!,text: "Deleting....");
+                                String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
+                                await appController.deleteUserName(username);
+                                list = appController.getAllUserList();
+                                currentAddedUser.value = username;
+                                appController.usernameTextEditingController.clear();
+                                appController.update(["updateUserList"]);
+                                await appController.saveListToFile(isSilent: true);
+                                stopLoaderDialog();
+                              });
+                            });
 
-                      },
-                      icon: Icon(Icons.add),
+                          },
+                          icon: Icon(Icons.delete),
+                        ),
+                        SizedBox(width: 2,),
+                        IconButton(
+                          onPressed: () async {
+                            showFollowUnfollowUserDialog(context,onFollow: () async {
+                              showLoaderDialog(Get.context!,text: "Adding....");
+                              String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
+                              await appController.addUsername(username);
+                              list = appController.getAllUserList();
+                              currentAddedUser.value = username;
+                              appController.usernameTextEditingController.clear();
+                              appController.update(["updateUserList"]);
+                              await appController.saveListToFile(isSilent: true);
+                              if(isNeedToStartService)
+                              {
+                                  await appController.restartBackgroundService(isToEnableSlider: false);
+                              }
+
+                              stopLoaderDialog();
+                            },onUnfollow: () async {
+                              showLoaderDialog(Get.context!,text: "Adding....");
+                              Uri uri = Uri.parse(appController.usernameTextEditingController.text);
+                              String username = await appController.getUsernameFromKuaishouUrl(appController.usernameTextEditingController.text);
+                              await appController.addUsername(uri.path + "<||>UNFOLLOW",unfollowUserName: username);
+                              list = appController.getAllUserList();
+                              currentAddedUser.value = username;
+                              appController.usernameTextEditingController.clear();
+                              appController.update(["updateUserList"]);
+                              await appController.saveListToFile(isSilent: true);
+                              if(isNeedToStartService)
+                              {
+                                await appController.initiateUnfollowUploadingProcess();
+                              }
+                              stopLoaderDialog();
+                            });
+                          },
+                          icon: Icon(Icons.add),
+                        )
+                      ],),
                     ),
                   ),
                 ),
               ),
-              SizedBox(height: 5,),
+               SizedBox(height: 5,),
               Obx(()=> Text("Current Added User :" + currentAddedUser.value)),
               SizedBox(height: 5,),
               GetBuilder<AppController>(
@@ -113,9 +206,11 @@ class DialogUtils
                                     style: TextStyle(fontSize: 10,),),
                                 )),
                                 IconButton(onPressed: () async {
-                                  await appController.deleteUserName(list[index]!.id!);
-                                  list = appController.getAllUserList();
-                                  appController.update(["updateUserList"]);
+                                  appController.showDeleteDialog(() async {
+                                    await appController.deleteUserName(list[index]!.id!);
+                                    list = appController.getAllUserList();
+                                    appController.update(["updateUserList"]);
+                                  });
                                 }, icon: Icon(Icons.delete), iconSize: 24,),
                               ],
                             ),

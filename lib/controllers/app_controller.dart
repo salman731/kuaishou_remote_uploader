@@ -41,6 +41,9 @@ import 'package:kuaishou_remote_uploader/utils/web_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/web_view_utils.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:external_path/external_path.dart';
+
 
 
 class   AppController extends GetxController {
@@ -126,6 +129,7 @@ class   AppController extends GetxController {
   RxInt unfollowUserFrequentRequests = 0.obs;
   RxInt unfollowUserOthers = 0.obs;
   RxInt unfollowUserOffline = 0.obs;
+  RxBool isToUpdateFolder = false.obs;
 
   /* initTimer()
   {
@@ -140,25 +144,39 @@ class   AppController extends GetxController {
   {
     //CookieManager.instance().deleteAllCookies();
     await SharedPrefsUtil.initSharedPreference();
+    var status = await Permission.manageExternalStorage.request();
+    var notification = await Permission.notification.request();
+    var ignorebattery = await Permission.ignoreBatteryOptimizations.request();
+
+
     isConcurrentProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS, defaultValue: true);
     isWebPageProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, defaultValue: true);
     isBackgroundModeEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_BACKGROUNDMODE_ENABLE, defaultValue: false);
     processBackgroundMode();
-    midNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, defaultValue: 25); // 12:00 AM -> 06:00 AM
-    morningAfterNoonSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, defaultValue: 15); // 6:00 AM -> 4:00 PM
-    eveningNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER, defaultValue: 10); // 4:00 PM -> 12:00 AM
+    midNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, defaultValue: 15); // 12:00 AM -> 06:00 AM
+    morningAfterNoonSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, defaultValue: 10); // 6:00 AM -> 4:00 PM
+    eveningNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER, defaultValue: 7); // 4:00 PM -> 12:00 AM
     unfollowUserIntervalSliderValue.value = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, defaultValue: 15); // 4:00 PM -> 12:00 AM
     downloadingListIdBox = await Hive.openBox("downloadingListId");
     usernameListIdBox = await Hive.openBox("usernameListIdBox");
     unfollowUserUrlListBox = await Hive.openBox("unfollowUserUrlListBox");
     String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
     String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
+
+    await verifyCaptcha();
+    if(cookie.isNotEmpty && cookie.isNotEmpty)
+    {
+      await initiateUnfollowUploadingProcess();
+    }
     // if(isRefresh)
     //   {
     await CookieManager.instance().deleteAllCookies();
     // }
-    if (((cookie == null || cookie.isEmpty) && (csrf == null || csrf.isEmpty)) || isRefresh) {
-      unfollowUserTimer!.cancel();
+    if (((cookie == null || cookie.isEmpty) &&
+        (csrf == null || csrf.isEmpty)) || isRefresh) {
+      if (unfollowUserTimer != null && unfollowUserTimer!.isActive) {
+        unfollowUserTimer!.cancel();
+      }
       headlessInAppWebView = HeadlessInAppWebView(
         initialUrlRequest: URLRequest(url: WebUri(STREAMTAPE_URL)),
         initialSize: Size(1366, 768),
@@ -205,6 +223,11 @@ class   AppController extends GetxController {
             //initTimer();
             isLoading.value = false;
             showToast("Webpage Loading Completed .....");
+            if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_FIRST_TIME)) {
+              SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_FIRST_TIME, true);
+              bool result = await importUsersToHive(isSilent: true);
+            }
+            await startServicesIfUserAvailable();
             if (!isConcurrentProcessing.value) {
               await getDownloadingVideoStatus();
             } else {
@@ -255,17 +278,22 @@ class   AppController extends GetxController {
   }
 
 
-  Future<void> getFolderList({bool isDeleted = false}) async
+  Future<void> getFolderList({bool isDeleted = false,bool isResume = false}) async
   {
+    if (isResume) {
+      isLoading.value = true;
+    }
     streamTapeFolder = await fetchFolderList();
     String? selectedFolderSP = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER, defaultValue: "");
     if (selectedFolderSP.isNotEmpty && !isDeleted) {
-      selectedFolder.value = streamTapeFolder!.folders!.where((e) => e.name == selectedFolderSP).first;
+      selectedFolder.value = streamTapeFolder!.folders!.where((e) => e.name ==  selectedFolderSP/*"Kwai 1 11 24"*/).first;
     }
     else {
       selectedFolder.value = streamTapeFolder!.folders!.first;
     }
-    selectedDownloadFolder.value = streamTapeFolder!.folders!.first;
+    if (isResume) {
+      isLoading.value = false;
+    }
     //return streamTapeFolder;
   }
 
@@ -348,6 +376,20 @@ class   AppController extends GetxController {
       },
     );
   }
+
+  Future<void> showDeleteDialog(Function onConfirm) async
+  {
+    ButterflyAlertDialog.show(
+      context: Get.context!,
+      title: 'Delete',
+      subtitle: 'Are sure you want to delete it?',
+      alertType: AlertType.delete,
+      onConfirm: () async {
+        onConfirm();
+      },
+    );
+  }
+
 
   Future<void> showReauthenticateStreamtapeDialog() async
   {
@@ -1323,19 +1365,47 @@ class   AppController extends GetxController {
     return list;
   }
 
+  List<String> getAllUsersListString() {
+    return usernameListIdBox.values.map((e) => e.toString()).toList();
+  }
+
   Future deleteUserName(String id) async
   {
     await usernameListIdBox.delete(id);
   }
+  Future<void> deleteUserByValue(String valueToDelete) async {
+    var keys = usernameListIdBox.keys.cast<String>().toList();
+    for (var key in keys) {
+      if (usernameListIdBox.get(key) == valueToDelete) {
+        await usernameListIdBox.delete(key); // Delete the entry by key
+        break;
+      }
+    }
+  }
 
-  Future addUsername(String userName) async
+  Future addUsername(String userName,{bool isImport = false,String? unfollowUserName}) async
   {
-    if (!usernameListIdBox.values.toList().any((value) => value.toString().contains(userName))) {
-      await usernameListIdBox.put(generateRandomString(10), userName);
+    if (unfollowUserName == null) {
+      if (!usernameListIdBox.values.toList().any((value) => value.toString().contains(userName))) {
+            await usernameListIdBox.put(generateRandomString(10), userName);
+          }
+          else {
+            if (!isImport) {
+              showToast("User already exists");
+            }
+          }
     }
-    else {
-      showToast("User already exists");
-    }
+    else
+      {
+        if (!usernameListIdBox.keys.toList().any((value) => value.toString().contains(unfollowUserName))) {
+          await usernameListIdBox.put(unfollowUserName, userName);
+        }
+        else {
+          if (!isImport) {
+            showToast("User already exists");
+          }
+        }
+      }
   }
 
   Future addUnfollowUsername(String url) async
@@ -1354,18 +1424,28 @@ class   AppController extends GetxController {
   {
     List<StreamtapeDownloadStatus> streamtapeDownloadStatusList = [];
     await SharedPrefsUtil.initSharedPreference();
-    String? response = await WebUtils.makeGetRequest(STREAMTAPE_DOWNLOADING_STATUS_API_URL, headers: {"Cookie": SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE)});
-    Map<String, dynamic> jsonMap = jsonDecode(response!);
-    List<dynamic> list = (jsonMap["data"] as List<dynamic>);
+    if (SharedPrefsUtil
+        .getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE)
+        .isNotEmpty) {
+      String? response = await WebUtils.makeGetRequest(
+          STREAMTAPE_DOWNLOADING_STATUS_API_URL, headers: {
+        "Cookie": SharedPrefsUtil.getString(
+            SharedPrefsUtil.KEY_STREAMTAPE_COOKIE)
+      });
+      Map<String, dynamic> jsonMap = jsonDecode(response!);
+      List<dynamic> list = (jsonMap["data"] as List<dynamic>);
 
-    for (dynamic item in list) {
-      if (item["status"] == "error") {
-        await deleteRemoteUploadingVideo(item["id"], isBackGroundProcess: true);
+      for (dynamic item in list) {
+        if (item["status"] == "error") {
+          await deleteRemoteUploadingVideo(
+              item["id"], isBackGroundProcess: true);
+        }
+        streamtapeDownloadStatusList.add(
+            StreamtapeDownloadStatus(status: item["status"],
+                url: item["url"],
+                id: item["id"],
+                isThumbnailUpdating: false.obs));
       }
-      streamtapeDownloadStatusList.add(StreamtapeDownloadStatus(status: item["status"],
-          url: item["url"],
-          id: item["id"],
-          isThumbnailUpdating: false.obs));
     }
     return streamtapeDownloadStatusList;
   }
@@ -1401,7 +1481,7 @@ class   AppController extends GetxController {
       exception = "";
       try {
         var headers = {
-          "Cookie": "clientid=3; did=web_dfa8864005520444a895fd1cb3c51538; client_key=65890b29; kpn=GAME_ZONE; _did=web_870397124DBD985F; didv=1730628663000; did=web_85aeaebcb9d6490bb484e761a201dd7c; Hm_lvt_86a27b7db2c5c0ae37fee4a8a35033ee=1730628678; userId=1584032460; userId=1584032460; kuaishou.live.bfb1s=9b8f70844293bed778aade6e0a8f9942; showFollowRedIcon=1; kuaishou.live.web_st=ChRrdWFpc2hvdS5saXZlLndlYi5zdBKgAduhWJuSZsFgEigNcXjuUANOh_bKu9KgEgCO2gJI8Lmi3VCz_BmBJbMOzQB1nG27Md_Un9EApYm3a0z1f30Gqjimq1DVTvswD2Z8r9uTlWkCskDe6mRkpFSRr3deu5c0w70xQjBSqy2peLWJQINA6zvmosJnYpgBtc_KEOGiefwhkrxJIFj5XLxz6JWxDjTQgpT5R9dn3Y-PRlA5Z3PB_YYaErZBy_JDfEY0lUogcFFbVS54zCIgz9mS_5B75NRPjfU30fUAOStq_FhwI8ZpQ0wSTisSi58oBTAB; kuaishou.live.web_ph=94ca92257e728995d3cf2ac2279002dfa289"
+          "Cookie": "clientid=3; did=web_a608360f69dbdaeaf57ed83a4379d45c; client_key=65890b29; kpn=GAME_ZONE; _did=web_7953587335F02819; did=web_de23d1096e060086a98e5010538a153ef370; kuaishou.live.bfb1s=7206d814e5c089a58c910ed8bf52ace5; userId=1584032460; kuaishou.live.web_st=ChRrdWFpc2hvdS5saXZlLndlYi5zdBKgAWs92ejvNoX5AM32zePUxyCcxSoEKujRcU0BYnk7wW7Js-8og-KalLxNo_Ep38pgFWTFossVMlkdHvE_D-F03kgAkr8RSLRYMQSDwUJ3a7h9Vi0-4Gs6OKZspnAAgEYEmZd7CfABi7H_0XaHqMI2k85kh6YclsTPWu-uB-lfWnwmhGdJUW6IohUoK5GCFqtsdI4q2G2EbmglO962fBOSQ2MaEvrof_XznEP1qd2QsxhyybtifyIgeHh9sNj2MW7bERrK5wkady4h0kaMOEX_AIj5S-JuOLgoBTAB; kuaishou.live.web_ph=bccb3f7173bf22fe9b8d4cd87abea5cfa093; userId=1584032460; showFollowRedIcon=1"
         };
         String? reponse = await WebUtils.makeGetRequest(KOUAISHOU_LIVE_FOLLOW_API, headers: headers, timeout: Duration(seconds: 15));
         KuaishouLiveUser kuaishouLiveUser = KuaishouLiveUser.fromJson(jsonDecode(reponse!));
@@ -1456,7 +1536,9 @@ class   AppController extends GetxController {
         isSliderEnable.value = true;
       });
     }
-    stopBackgroundService();
+    if (await isServiceRunning()) {
+      stopBackgroundService();
+    }
     await Future.delayed(Duration(seconds: 2));
     startBackgroundService();
   }
@@ -1505,7 +1587,7 @@ class   AppController extends GetxController {
     }
   }
 
-  Future uploadUnfollowUserWithWebView (int min) async
+  Future initiateUnfollowUploadingProcess () async
   {
     if(unfollowUserTimer != null)
       {
@@ -1634,6 +1716,120 @@ class   AppController extends GetxController {
   bool isStreamTapeDownloadUrlLoaded (DownloadItem downloadItem)
   {
     return downloadItem!.downloadUrl != null && downloadItem!.downloadUrl != "Press Download icon to get link...."  && downloadItem!.downloadUrl != "Unable to get download url....";
+  }
+
+  Future<void> saveListToFile({bool isSilent = false}) async {
+    // Request storage permission
+    if (!isSilent) {
+      DialogUtils.showLoaderDialog(Get.context!, text: "Exporting....");
+    }
+    //if (permissionStatus.isGranted) {
+    // Get the download directory
+    List<String> _exPath = await ExternalPath.getExternalStorageDirectories();
+    final downloadDirectory = Directory('${_exPath[0]}/kuaishou_data');
+    if (!await downloadDirectory.exists()) {
+      await downloadDirectory.create(recursive: true);
+    }
+
+    // Prepare the text file
+    final filePath = '${downloadDirectory.path}/users.txt';
+    final file = File(filePath);
+
+    List<String> userList = getAllUsersListString();
+    // Join list items into a single string with line breaks
+    String fileContent = userList.join('\n');
+
+    // Write to file
+    await file.writeAsString(fileContent);
+
+    // Notify the user that the file is saved
+    if (!isSilent) {
+      ScaffoldMessenger.of(Get.context!).showSnackBar(
+              SnackBar(content: Text('File saved to $filePath')));
+      // } else {
+      //   // Handle permission denied
+      //   ScaffoldMessenger.of(Get.context!).showSnackBar(SnackBar(content: Text('Storage permission denied')));
+      // }
+      DialogUtils.stopLoaderDialog();
+    }
+  }
+
+  Future<bool> importUsersToHive({bool isSilent = false}) async {
+    List<String> lines = [];
+    bool isUserAvailable = true;
+    if (!isSilent) {
+      DialogUtils.showLoaderDialog(Get.context!, text: "Importing....");
+    }
+    try {
+      // Get the application documents directory
+
+      List<String> _exPath = await ExternalPath.getExternalStorageDirectories();
+      final downloadDirectory = Directory('${_exPath[0]}/kuaishou_data');
+      String filePath = '${downloadDirectory.path}/users.txt';
+
+      // Reading the file
+      File file = File(filePath);
+      if (await file.exists()) {
+        lines = await file.readAsLines();
+      }
+      else {
+        if (!isSilent) {
+          showToast("Unable to find file....");
+        }
+        isUserAvailable =  false;
+      }
+    } catch (e) {
+      print('Error reading file: $e');
+    }
+
+    if(lines.length > 0)
+      {
+        for(String username in lines)
+          {
+            if(username.contains("<||>UNFOLLOW"))
+              {
+                String initialUrl = "https://v.kuaishou.com${username.replaceAll("<||>UNFOLLOW", "")}";
+                String usernamefinal = await getUsernameFromKuaishouUrl(initialUrl);
+                await addUsername(username,isImport: true,unfollowUserName: usernamefinal);
+              }
+            else
+              {
+                await addUsername(username,isImport: true);
+              }
+
+          }
+
+      }
+    else
+      {
+        isUserAvailable = false;
+      }
+    if (!isSilent) {
+      DialogUtils.stopLoaderDialog();
+    }
+    return isUserAvailable;
+  }
+
+ Future verifyCaptcha({bool isRefresh = false}) async
+  {
+    if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty)
+    {
+      WebViewUtils webViewUtils = WebViewUtils();
+      await webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
+      if (isRefresh) {
+        await initiateUnfollowUploadingProcess();
+      }
+    }
+  }
+
+  Future startServicesIfUserAvailable() async
+  {
+    List<UserKuaishou> list = getAllUserList();
+    if(list.length > 0)
+    {
+      await restartBackgroundService();
+      await initiateUnfollowUploadingProcess();
+    }
   }
 
 }

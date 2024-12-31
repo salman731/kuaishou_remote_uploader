@@ -124,15 +124,16 @@ class WebViewUtils
          IconButton(onPressed: () async {
            var result = await inAppWebViewController.evaluateJavascript(source: "document.cookie");
            SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, result.toString().split(";")[0]);
+           SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
+           Get.back();
          }, icon: Icon(Icons.add))
        ],
      );
-     showDialog(context: Get.context!, builder: (_){
+     await showDialog(context: Get.context!, builder: (_){
        return alert;
      });
      //return finalUrl!;
    }
-
   Future disposeWebView() async
   {
     await headlessWebView!.dispose();

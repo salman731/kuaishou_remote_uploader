@@ -22,6 +22,7 @@ class SharedPrefsUtil
   static final KEY_CURRENT_UNFOLLOW_MIN = "SP_CURRENT_UNFOLLOW_MIN";
   static final KEY_KUAISHOU_COOKIE = "SP_KUAISHOU_COOKIE";
   static final KEY_IS_CAPTCHA_VERFICATION_REQUIRED = "SP_IS_CAPTCHA_VERFICATION_REQUIRED";
+  static final KEY_IS_FIRST_TIME = "SP_IS_FIRST_TIME";
 
   static late SharedPreferences sharedPreferences;
 

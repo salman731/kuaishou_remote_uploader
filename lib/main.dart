@@ -47,6 +47,11 @@ void stopBackgroundService() {
   service.invoke("stopService");
 }
 
+Future<bool> isServiceRunning () async
+{
+  return await service.isRunning();
+}
+
 const notificationChannelId = 'my_foreground';
 
 const notificationId = 888;
@@ -226,14 +231,13 @@ void onStart(ServiceInstance service) async {
       service.setAsBackgroundService();
     });
   }
-
   service.on('stopService').listen((event) async {
     await service.stopSelf();
   });
   await SharedPrefsUtil.initSharedPreference();
-  int midNightDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER,defaultValue: 25).toInt(); // 12:00 AM -> 06:00 AM
-  int morningAfterNoonDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER,defaultValue: 15).toInt(); // 6:00 AM -> 4:00 PM
-  int eveningNightDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER,defaultValue: 10).toInt(); // 4:00 PM -> 12:00 AM
+  int midNightDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER,defaultValue: 15).toInt(); // 12:00 AM -> 06:00 AM
+  int morningAfterNoonDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER,defaultValue: 10).toInt(); // 6:00 AM -> 4:00 PM
+  int eveningNightDuration = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER,defaultValue: 7).toInt(); // 4:00 PM -> 12:00 AM
   List<Duration> listDuration = [Duration(minutes: midNightDuration),Duration(minutes: morningAfterNoonDuration),Duration(minutes: eveningNightDuration)];
 
   int userOnline = 0;
@@ -246,10 +250,17 @@ void onStart(ServiceInstance service) async {
     bool isError = false;
     String remainingTime = "";
     String errorMsg = "";
+    await SharedPrefsUtil.reloadSharedPreferences();
+    String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
+    String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
     final stopWatchTimer = StopWatchTimer(
         mode: StopWatchMode.countDown,
         presetMillisecond: StopWatchTimer.getMilliSecFromMinute(getDurationBaseOnTime(listDuration).inMinutes), // millisecond => minute.
         onChangeRawSecond: (value) async {
+          if(cookie.isEmpty && csrf.isEmpty)
+          {
+            await showNotification(title: "Uploading Service",content: "⏳ Waiting for Streamtape Login......");
+          }
           remainingTime = "Next in : ${formatTime(value)}";
           if (isProcessingDone) {
             await showNotification(title: "Uploading Service (${remainingTime})",content: "✅ User Online: ${userOnline} | Newly Uploaded User: ${userNewUploaded} | Current User Uploading: ${userOldUploaded}");
@@ -261,6 +272,10 @@ void onStart(ServiceInstance service) async {
          }
     );
     stopWatchTimer.onStartTimer();
+    if(cookie.isEmpty && csrf.isEmpty)
+    {
+      return;
+    }
     if (service is AndroidServiceInstance) {
       //print("This is background service" + DateTime.now().toString());
 
@@ -433,22 +448,25 @@ class _MyHomePageState extends State<MyHomePage> {
       FlutterBackgroundService().invoke("setAsBackground");
     });*/
     //initAutoStart();
+
     Future.delayed(Duration(seconds: 0),() async{
       await appController.loginToStreamTape();
       appLifecycleListener = AppLifecycleListener(
           onResume: () async {
             if (previousState!= null && !appController.isDownloadStatusUpdating.value) {
               await SharedPrefsUtil.reloadSharedPreferences();
-              if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty)
-                {
-                  WebViewUtils webViewUtils = WebViewUtils();
-                  webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
-                }
-              if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED,defaultValue: false))
-                {
-                  await appController.getFolderList();
-                  SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED,false);
-                }
+              await appController.verifyCaptcha(isRefresh: true);
+              DateTime currentDateTime = DateTime.now();
+              String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
+              if(appController.selectedFolder.value.name != folderName && folderName == SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER, defaultValue: ""))
+              {
+                  await appController.getFolderList(isResume: true);
+              }
+              // if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED,defaultValue: false))
+              //   {
+              //     await appController.getFolderList();
+              //     SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED,false);
+              //   }
               if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS,defaultValue: true)) {
                 await appController.getDownloadingVideoStatus();
               } else {
@@ -469,8 +487,7 @@ class _MyHomePageState extends State<MyHomePage> {
           }
 
       );
-      int min = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 15);
-      await appController.uploadUnfollowUserWithWebView(min);
+      //await appController.initiateUnfollowUploadingProcess();
     });
 
   }
@@ -552,6 +569,11 @@ class _MyHomePageState extends State<MyHomePage> {
                   DialogUtils.showUserListDialog(context);
                 case "restart_background_service":
                   appController.restartBackgroundService(isToEnableSlider: false);
+                case "export_users":
+                  appController.saveListToFile();
+                case "import_users":
+                  await appController.importUsersToHive();
+                  appController.restartBackgroundService(isToEnableSlider: false);
 
               }
             },
@@ -559,6 +581,8 @@ class _MyHomePageState extends State<MyHomePage> {
               PopupMenuItem<String>(value: "add_user", child: Text('Add User')),
               PopupMenuItem<String>(value: "restart_background_service", child: Text('Restart Background Service')),
               PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
+              PopupMenuItem<String>(value: "export_users", child: Text('Export Users')),
+              PopupMenuItem<String>(value: "import_users", child: Text('Import Users')),
               PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
               PopupMenuItem(
                 child: Obx(()=> CheckboxListTile(
