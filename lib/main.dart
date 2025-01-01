@@ -280,8 +280,10 @@ void onStart(ServiceInstance service) async {
       //print("This is background service" + DateTime.now().toString());
 
       AppController appController = Get.put(AppController());
+      await appController.setFolderIfNotSet();
       final appDocumentDirectory = await getApplicationDocumentsDirectory();
       Hive.init(appDocumentDirectory.path);
+      await Hive.close();
       appController.usernameListIdBox = await Hive.openBox("usernameListIdBox");
       List<UserKuaishou> list = appController.getAllUserList();
       await appController.createFolderOnNextDay();
@@ -572,8 +574,10 @@ class _MyHomePageState extends State<MyHomePage> {
                 case "export_users":
                   appController.saveListToFile();
                 case "import_users":
-                  await appController.importUsersToHive();
-                  appController.restartBackgroundService(isToEnableSlider: false);
+                  bool isAdded = await appController.importUsersToHive();
+                  if (isAdded) {
+                    appController.restartBackgroundService(isToEnableSlider: false);
+                  }
 
               }
             },

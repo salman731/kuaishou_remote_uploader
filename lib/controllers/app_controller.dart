@@ -289,7 +289,22 @@ class   AppController extends GetxController {
       selectedFolder.value = streamTapeFolder!.folders!.where((e) => e.name ==  selectedFolderSP/*"Kwai 1 11 24"*/).first;
     }
     else {
-      selectedFolder.value = streamTapeFolder!.folders!.first;
+      DateTime currentDateTime = DateTime.now();
+      String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
+      StreamTapeFolderItem? currentStreamTapeFolder = streamTapeFolder!.folders!.where((e) => e.name ==  folderName).firstOrNull;
+      if(currentStreamTapeFolder != null && !isDeleted)
+        {
+          selectedFolder.value = currentStreamTapeFolder;
+          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, currentStreamTapeFolder.name!);
+          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, currentStreamTapeFolder.id!);
+        }
+      else
+        {
+          selectedFolder.value = streamTapeFolder!.folders!.first;
+          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, selectedFolder.value.name!);
+          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, selectedFolder.value.id!);
+        }
+
     }
     if (isResume) {
       isLoading.value = false;
@@ -1601,11 +1616,14 @@ class   AppController extends GetxController {
     unfollowUserStopwatch = [];
     List<UserKuaishou> list = getAllUserList();
     List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+    await setFolderIfNotSet();
     if (listFiltered.length > 0) {
       int totalMin = getUnfollowMin(listFiltered);
       SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,totalMin);
       unfollowCurrentTime.value = totalMin;
       unfollowUserTimer = makePeriodicTimer(Duration(minutes: totalMin),fireNow: true,isCustomTimer: true,isUnfollowTimer: true,(timer) async {
+
+        listFiltered = getAllUserList().where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
         final stopWatchTimer = StopWatchTimer(
             mode: StopWatchMode.countDown,
             presetMillisecond: StopWatchTimer.getMilliSecFromMinute(SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,)), // millisecond => minute.
@@ -1614,6 +1632,7 @@ class   AppController extends GetxController {
             }
         );
         stopWatchTimer.onStartTimer();
+
         unfollowUserStopwatch.add(stopWatchTimer);
         isUnfollowUserProcessing.value = true;
         List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await getRemoteDownloadingStatus_background();
@@ -1625,24 +1644,11 @@ class   AppController extends GetxController {
         unfollowUserOthers.value = 0;
         unfollowUserOffline.value = 0;
         totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
+
         for (UserKuaishou userKuaishou in listFiltered) {
             try {
               String initialUrl = "https://v.kuaishou.com${userKuaishou.value!.replaceAll("<||>UNFOLLOW", "")}";
-            //   String url = await getFlvUrlfromKuaihsouLink(initialUrl);
-            //   if (url.isNotEmpty) {
-            //     unfollowUserOnline.value  = unfollowUserOnline.value + 1;
-            //     bool isUploaded = await startUploading_background(url, streamTapeDownloadStatusList);
-            //     if(isUploaded)
-            //     {
-            //       unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
-            //     }
-            //   }
-            // } catch (e) {
-            //   print(e);
-            // }
-            // totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
-            // await Future.delayed(Duration(seconds: getIntBetweenRange(20, 30)));
-              //List<String> cookie = ["web_907321761e6e4eff96111b476bc9cad4","web_5db7f4c0d9664902af774fd08ebdf769","web_618d6ac474dd404a998cf2b641d96843"];
+
               String cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
               bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
               if (cookie.isNotEmpty && !isCaptchaRequired) {
@@ -1681,6 +1687,8 @@ class   AppController extends GetxController {
                         unfollowUserOffline.value = unfollowUserOffline.value + 1;
                       }
                   }
+
+
               }
             } catch (e) {
               print(e);
@@ -1829,6 +1837,27 @@ class   AppController extends GetxController {
     {
       await restartBackgroundService();
       await initiateUnfollowUploadingProcess();
+    }
+  }
+
+  Future setFolderIfNotSet() async
+  {
+
+    if (SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER).isEmpty || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID).isEmpty) {
+      StreamTapeFolder rootFolder = await fetchFolderList();
+      DateTime currentDateTime = DateTime.now();
+      String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
+      StreamTapeFolderItem? currentStreamTapeFolder = rootFolder!.folders!.where((e) => e.name ==  folderName).firstOrNull;
+      if(currentStreamTapeFolder != null)
+      {
+        SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, currentStreamTapeFolder.name!);
+        SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, currentStreamTapeFolder.id!);
+      }
+      else
+      {
+        SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, rootFolder!.folders!.first.name!);
+        SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, rootFolder!.folders!.first.id!);
+      }
     }
   }
 
