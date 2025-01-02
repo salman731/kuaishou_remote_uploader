@@ -73,7 +73,7 @@ class WebViewUtils
     return finalUrl!;
   }
 
-   Future<void> showWebViewDialog(String urlo,String urlExtension,{Map<String,String>? header,bool isBackground = false}) async
+   Future<void> showWebViewDialog(String urlo,String urlExtension,{Map<String,String>? header,bool isBackground = false,bool isDesktop = false,bool isToGetFollowApi = false}) async
    {
      videoLinkCompleter = Completer();
      finalUrl = "";
@@ -99,7 +99,7 @@ class WebViewUtils
        onConsoleMessage: (controller, consoleMessage) {
        },
 
-       initialSettings: InAppWebViewSettings(isInspectable: false,useShouldInterceptRequest: !isBackground,useShouldOverrideUrlLoading: !isBackground,preferredContentMode: UserPreferredContentMode.MOBILE,incognito: true,/*userAgent: "Mozilla/5.0 (Linux; Android 14; SM-A536B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.231 Mobile Safari/537.36	"*/),
+       initialSettings: InAppWebViewSettings(isInspectable: false,useShouldInterceptRequest: !isBackground,useShouldOverrideUrlLoading: !isBackground,preferredContentMode: isDesktop ? UserPreferredContentMode.DESKTOP : UserPreferredContentMode.MOBILE,incognito: true,userAgent: isDesktop ?  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" : ""),
        shouldInterceptRequest: !isBackground ? (controller,request) async
        {
          Get.find<AppController>().logText  += "url: ${request.url.origin}\n";
@@ -122,10 +122,26 @@ class WebViewUtils
        content: WebView,
        actions: [
          IconButton(onPressed: () async {
-           var result = await inAppWebViewController.evaluateJavascript(source: "document.cookie");
-           SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, result.toString().split(";")[0]);
-           SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
-           Get.back();
+           if (!isToGetFollowApi) {
+             var result = await inAppWebViewController.evaluateJavascript(source: "document.cookie");
+             SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, result.toString().split(";")[0]);
+             SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
+             Get.back();
+           } else {
+             List<Cookie> cookies = await CookieManager.instance().getCookies(url: WebUri("https://live.kuaishou.com"));
+             String Cookies = cookies.map((cookie) => '${cookie.name}=${cookie.value}').toList().join(";");
+             SharedPrefsUtil.setString(SharedPrefsUtil.KEY_FOLLOW_LIVE_COOKIE, Cookies);
+             Fluttertoast.showToast(
+                 msg: Cookies,
+                 toastLength: Toast.LENGTH_LONG,
+                 gravity: ToastGravity.BOTTOM,
+                 timeInSecForIosWeb: 1,
+                 backgroundColor: Colors.blue,
+                 textColor: Colors.white,
+                 fontSize: 16.0
+             );
+             Get.back();
+           }
          }, icon: Icon(Icons.add))
        ],
      );

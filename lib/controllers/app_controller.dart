@@ -1412,7 +1412,7 @@ class   AppController extends GetxController {
     }
     else
       {
-        if (!usernameListIdBox.keys.toList().any((value) => value.toString().contains(unfollowUserName))) {
+        if (!usernameListIdBox.keys.toList().any((value) => value.toString().contains(unfollowUserName)) && !usernameListIdBox.values.toList().any((value) => value.toString().contains(unfollowUserName))) {
           await usernameListIdBox.put(unfollowUserName, userName);
         }
         else {
@@ -1488,6 +1488,7 @@ class   AppController extends GetxController {
   {
     List<ListElement> list = [];
     String exception = "";
+    String cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_FOLLOW_LIVE_COOKIE);
     do {
       int time = getIntBetweenRange(1, 3);
       if (exception.isNotEmpty) {
@@ -1496,7 +1497,7 @@ class   AppController extends GetxController {
       exception = "";
       try {
         var headers = {
-          "Cookie": "clientid=3; did=web_a608360f69dbdaeaf57ed83a4379d45c; client_key=65890b29; kpn=GAME_ZONE; _did=web_7953587335F02819; did=web_de23d1096e060086a98e5010538a153ef370; kuaishou.live.bfb1s=7206d814e5c089a58c910ed8bf52ace5; userId=1584032460; kuaishou.live.web_st=ChRrdWFpc2hvdS5saXZlLndlYi5zdBKgAWs92ejvNoX5AM32zePUxyCcxSoEKujRcU0BYnk7wW7Js-8og-KalLxNo_Ep38pgFWTFossVMlkdHvE_D-F03kgAkr8RSLRYMQSDwUJ3a7h9Vi0-4Gs6OKZspnAAgEYEmZd7CfABi7H_0XaHqMI2k85kh6YclsTPWu-uB-lfWnwmhGdJUW6IohUoK5GCFqtsdI4q2G2EbmglO962fBOSQ2MaEvrof_XznEP1qd2QsxhyybtifyIgeHh9sNj2MW7bERrK5wkady4h0kaMOEX_AIj5S-JuOLgoBTAB; kuaishou.live.web_ph=bccb3f7173bf22fe9b8d4cd87abea5cfa093; userId=1584032460; showFollowRedIcon=1"
+          "Cookie": cookie.isEmpty ? "clientid=3; did=web_a608360f69dbdaeaf57ed83a4379d45c; client_key=65890b29; kpn=GAME_ZONE; _did=web_7953587335F02819; did=web_de23d1096e060086a98e5010538a153ef370; kuaishou.live.bfb1s=7206d814e5c089a58c910ed8bf52ace5; userId=1584032460; kuaishou.live.web_st=ChRrdWFpc2hvdS5saXZlLndlYi5zdBKgAWs92ejvNoX5AM32zePUxyCcxSoEKujRcU0BYnk7wW7Js-8og-KalLxNo_Ep38pgFWTFossVMlkdHvE_D-F03kgAkr8RSLRYMQSDwUJ3a7h9Vi0-4Gs6OKZspnAAgEYEmZd7CfABi7H_0XaHqMI2k85kh6YclsTPWu-uB-lfWnwmhGdJUW6IohUoK5GCFqtsdI4q2G2EbmglO962fBOSQ2MaEvrof_XznEP1qd2QsxhyybtifyIgeHh9sNj2MW7bERrK5wkady4h0kaMOEX_AIj5S-JuOLgoBTAB; kuaishou.live.web_ph=bccb3f7173bf22fe9b8d4cd87abea5cfa093; userId=1584032460; showFollowRedIcon=1" : cookie
         };
         String? reponse = await WebUtils.makeGetRequest(KOUAISHOU_LIVE_FOLLOW_API, headers: headers, timeout: Duration(seconds: 15));
         KuaishouLiveUser kuaishouLiveUser = KuaishouLiveUser.fromJson(jsonDecode(reponse!));

@@ -569,6 +569,9 @@ class _MyHomePageState extends State<MyHomePage> {
                   Get.to(StreamtapeDownloadScreen());
                 case "add_user":
                   DialogUtils.showUserListDialog(context);
+                case "get_follow_live_api_cookie":
+                  WebViewUtils webViewUtils = WebViewUtils();
+                  await webViewUtils.showWebViewDialog("https://live.kuaishou.com/my-follow/living", ".flv",isDesktop: true,isToGetFollowApi: true,header: {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"});
                 case "restart_background_service":
                   appController.restartBackgroundService(isToEnableSlider: false);
                 case "export_users":
@@ -587,6 +590,7 @@ class _MyHomePageState extends State<MyHomePage> {
               PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
               PopupMenuItem<String>(value: "export_users", child: Text('Export Users')),
               PopupMenuItem<String>(value: "import_users", child: Text('Import Users')),
+              PopupMenuItem<String>(value: "get_follow_live_api_cookie", child: Text('Get Follow Live Api Cookie')),
               PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
               PopupMenuItem(
                 child: Obx(()=> CheckboxListTile(
