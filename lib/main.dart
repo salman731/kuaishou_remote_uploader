@@ -539,648 +539,662 @@ class _MyHomePageState extends State<MyHomePage> {
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-        actions: <Widget>[
-          PopupMenuButton<String>(
-            onSelected: (item) async {
-              switch(item)
-                  {
-                case "refresh":
-                  //WebViewUtils webViewUtils = WebViewUtils();
-                  //String? oLink = await WebUtils.getOriginalUrl("https://v.kuaishou.com/9rBZxQ");
-                  //webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
-                  await appController.showReauthenticateStreamtapeDialog();
-                  //await appController.getLiveUserList();
-                  // var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
-                  // String? orginalUrl = await WebUtils.getOriginalUrl("https://v.kuaishou.com/cx20Ka",headers: header);
-                  // String? response = await WebUtils.makeGetRequest(orginalUrl!,headers: header);
-                  // print(response);
-                  // String? response2 = await appController.getStreamUrlForBackgroundUpload_Web2("https://v.kuaishou.com/cx20Ka");
-                  // print(response2);
-                 case "streamtape_downloader":
-                  Get.to(StreamtapeDownloadScreen());
-                case "add_user":
-                  DialogUtils.showUserListDialog(context);
-                case "get_follow_live_api_cookie":
-                  WebViewUtils webViewUtils = WebViewUtils();
-                  await webViewUtils.showWebViewDialog("https://live.kuaishou.com/my-follow/living", ".flv",isDesktop: true,isToGetFollowApi: true,header: {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"});
-                case "restart_background_service":
-                  appController.restartBackgroundService(isToEnableSlider: false);
-                case "export_users":
-                  appController.saveListToFile();
-                case "import_users":
-                  bool isAdded = await appController.importUsersToHive();
-                  if (isAdded) {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop){
+        ButterflyAlertDialog.show(
+          context: Get.context!,
+          title: 'Exit',
+          subtitle: 'Are sure you want to exit?',
+          alertType: AlertType.warning,
+          onConfirm: () async {
+            exit(0);
+          },
+        );
+      } ,
+      child: Scaffold(
+        appBar: AppBar(
+          // TRY THIS: Try changing the color here to a specific color (to
+          // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
+          // change color while the other colors stay the same.
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          // Here we take the value from the MyHomePage object that was created by
+          // the App.build method, and use it to set our appbar title.
+          title: Text(widget.title),
+          actions: <Widget>[
+            PopupMenuButton<String>(
+              onSelected: (item) async {
+                switch(item)
+                    {
+                  case "refresh":
+                    //WebViewUtils webViewUtils = WebViewUtils();
+                    //String? oLink = await WebUtils.getOriginalUrl("https://v.kuaishou.com/9rBZxQ");
+                    //webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
+                    await appController.showReauthenticateStreamtapeDialog();
+                    //await appController.getLiveUserList();
+                    // var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
+                    // String? orginalUrl = await WebUtils.getOriginalUrl("https://v.kuaishou.com/cx20Ka",headers: header);
+                    // String? response = await WebUtils.makeGetRequest(orginalUrl!,headers: header);
+                    // print(response);
+                    // String? response2 = await appController.getStreamUrlForBackgroundUpload_Web2("https://v.kuaishou.com/cx20Ka");
+                    // print(response2);
+                   case "streamtape_downloader":
+                    Get.to(StreamtapeDownloadScreen());
+                  case "add_user":
+                    DialogUtils.showUserListDialog(context);
+                  case "get_follow_live_api_cookie":
+                    WebViewUtils webViewUtils = WebViewUtils();
+                    await webViewUtils.showWebViewDialog("https://live.kuaishou.com/my-follow/living", ".flv",isDesktop: true,isToGetFollowApi: true,header: {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"});
+                  case "restart_background_service":
                     appController.restartBackgroundService(isToEnableSlider: false);
-                  }
+                  case "export_users":
+                    appController.saveListToFile();
+                  case "import_users":
+                    bool isAdded = await appController.importUsersToHive();
+                    if (isAdded) {
+                      appController.restartBackgroundService(isToEnableSlider: false);
+                    }
 
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem<String>(value: "add_user", child: Text('Add User')),
-              PopupMenuItem<String>(value: "restart_background_service", child: Text('Restart Background Service')),
-              PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
-              PopupMenuItem<String>(value: "export_users", child: Text('Export Users')),
-              PopupMenuItem<String>(value: "import_users", child: Text('Import Users')),
-              PopupMenuItem<String>(value: "get_follow_live_api_cookie", child: Text('Get Follow Live Api Cookie')),
-              PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
-              PopupMenuItem(
-                child: Obx(()=> CheckboxListTile(
-                  activeColor: Colors.blue,
-                  value: appController.isConcurrentProcessing.value,
-                  onChanged: (value){
-                    appController.isConcurrentProcessing.value = !appController.isConcurrentProcessing.value;
-                    SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS, appController.isConcurrentProcessing.value);
-                  },
-                  title: Text("Enable Concurrent Processing"),
-                ),
-
-                ),
-              ),
-              PopupMenuItem(
-                child: Obx(()=> CheckboxListTile(
-                  activeColor: Colors.blue,
-                  value: appController.isWebPageProcessing.value,
-                  onChanged: (value){
-                    appController.isWebPageProcessing.value = !appController.isWebPageProcessing.value;
-                    SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, appController.isWebPageProcessing.value);
-                  },
-                  title: Text("Enable Web Page Processing"),
-                ),
-
-                ),
-              ),
-              PopupMenuItem(
-                child: Obx(()=> CheckboxListTile(
-                  activeColor: Colors.blue,
-                  value: appController.isBackgroundModeEnable.value,
-                  onChanged: (value){
-                    appController.isBackgroundModeEnable.value = !appController.isBackgroundModeEnable.value;
-                    SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_BACKGROUNDMODE_ENABLE, appController.isBackgroundModeEnable.value);
-                    appController.processBackgroundMode();
-                  },
-                  title: Text("Enable Background Mode"),
-                ),
-
-                ),
-              ),
-              PopupMenuItem(child: Obx(()=> appController.isBackGroundModeTimeRadioButtonsVisible.value ? Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: ListTile(
-                                title: const Text('Forever'),
-                                leading: Radio<BackgroundModeTimeEnum>(
-                                  value: BackgroundModeTimeEnum.ALLTIME,
-                                  groupValue: appController.backgroundModeTimeEnumRadioValue.value,
-                                  onChanged: (BackgroundModeTimeEnum? value) {
-                                    appController.backgroundModeTimeEnumRadioValue.value = BackgroundModeTimeEnum.ALLTIME;
-                                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME, BackgroundModeTimeEnum.ALLTIME.name);
-                                    appController.processBackgroundMode();
-                                    //SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME_RANGE, "");
-                                  },
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: ListTile(
-                                title: const Text('Time Specific'),
-                                leading: Radio<BackgroundModeTimeEnum>(
-                                  value: BackgroundModeTimeEnum.TIMESPECIFIC,
-                                  groupValue: appController.backgroundModeTimeEnumRadioValue.value,
-                                  onChanged: (BackgroundModeTimeEnum? value) {
-                                    appController.backgroundModeTimeEnumRadioValue.value = BackgroundModeTimeEnum.TIMESPECIFIC;
-                                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME, BackgroundModeTimeEnum.TIMESPECIFIC.name);
-                                    appController.processBackgroundMode();
-                                  },
-                                ),
-                              ),
-                            ),
-                          ],
-                        ) : SizedBox.shrink(),
-              )
-
-              ),
-              PopupMenuItem(child: Obx(()=> appController.isBackgroundModeRangeSliderVisible.value ? Column(mainAxisAlignment: MainAxisAlignment.start,children: [
-                Text("Background Mode Time Interval (24 H) (${appController.backgroundModeTimeSpecificRangeValue.value.start.toInt()} -> ${appController.backgroundModeTimeSpecificRangeValue.value.end.toInt()})"),
-                RangeSlider(
-                  values: appController.backgroundModeTimeSpecificRangeValue.value,
-                  max: 23,
-                  min: 0,
-                  divisions: 24,
-                  labels: RangeLabels(
-                    appController.backgroundModeTimeSpecificRangeValue.value.start.toInt().toString(),
-                    appController.backgroundModeTimeSpecificRangeValue.value.end.toInt().toString(),
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<String>(value: "add_user", child: Text('Add User')),
+                PopupMenuItem<String>(value: "restart_background_service", child: Text('Restart Background Service')),
+                PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
+                PopupMenuItem<String>(value: "export_users", child: Text('Export Users')),
+                PopupMenuItem<String>(value: "import_users", child: Text('Import Users')),
+                PopupMenuItem<String>(value: "get_follow_live_api_cookie", child: Text('Get Follow Live Api Cookie')),
+                PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isConcurrentProcessing.value,
+                    onChanged: (value){
+                      appController.isConcurrentProcessing.value = !appController.isConcurrentProcessing.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS, appController.isConcurrentProcessing.value);
+                    },
+                    title: Text("Enable Concurrent Processing"),
                   ),
-                  onChanged: (RangeValues values) {
-                    print("range slider is changing......");
-                    appController.backgroundModeTimeSpecificRangeValue.value = values;
 
-                  },
-                  onChangeEnd: (RangeValues values){
-                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME_RANGE, "${values.start.toInt()}:${values.end.toInt()}");
-                    appController.processBackgroundMode();
-                  },
+                  ),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isWebPageProcessing.value,
+                    onChanged: (value){
+                      appController.isWebPageProcessing.value = !appController.isWebPageProcessing.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, appController.isWebPageProcessing.value);
+                    },
+                    title: Text("Enable Web Page Processing"),
+                  ),
+
+                  ),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isBackgroundModeEnable.value,
+                    onChanged: (value){
+                      appController.isBackgroundModeEnable.value = !appController.isBackgroundModeEnable.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_BACKGROUNDMODE_ENABLE, appController.isBackgroundModeEnable.value);
+                      appController.processBackgroundMode();
+                    },
+                    title: Text("Enable Background Mode"),
+                  ),
+
+                  ),
+                ),
+                PopupMenuItem(child: Obx(()=> appController.isBackGroundModeTimeRadioButtonsVisible.value ? Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: ListTile(
+                                  title: const Text('Forever'),
+                                  leading: Radio<BackgroundModeTimeEnum>(
+                                    value: BackgroundModeTimeEnum.ALLTIME,
+                                    groupValue: appController.backgroundModeTimeEnumRadioValue.value,
+                                    onChanged: (BackgroundModeTimeEnum? value) {
+                                      appController.backgroundModeTimeEnumRadioValue.value = BackgroundModeTimeEnum.ALLTIME;
+                                      SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME, BackgroundModeTimeEnum.ALLTIME.name);
+                                      appController.processBackgroundMode();
+                                      //SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME_RANGE, "");
+                                    },
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: ListTile(
+                                  title: const Text('Time Specific'),
+                                  leading: Radio<BackgroundModeTimeEnum>(
+                                    value: BackgroundModeTimeEnum.TIMESPECIFIC,
+                                    groupValue: appController.backgroundModeTimeEnumRadioValue.value,
+                                    onChanged: (BackgroundModeTimeEnum? value) {
+                                      appController.backgroundModeTimeEnumRadioValue.value = BackgroundModeTimeEnum.TIMESPECIFIC;
+                                      SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME, BackgroundModeTimeEnum.TIMESPECIFIC.name);
+                                      appController.processBackgroundMode();
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ) : SizedBox.shrink(),
                 )
-              ],) : SizedBox.shrink(),
-              ),),
-              PopupMenuItem(
-                child: Obx(()=>  Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    Text("Mid Night Background Interval 12:00 AM -> 06:00 AM (${appController.midNightSliderValue.value.toInt()} min)"),
-                    Opacity(
-                      opacity: appController.isSliderEnable.value ? 1 : 0.5,
-                      child: Slider(
-                        value: appController.midNightSliderValue.value,
+
+                ),
+                PopupMenuItem(child: Obx(()=> appController.isBackgroundModeRangeSliderVisible.value ? Column(mainAxisAlignment: MainAxisAlignment.start,children: [
+                  Text("Background Mode Time Interval (24 H) (${appController.backgroundModeTimeSpecificRangeValue.value.start.toInt()} -> ${appController.backgroundModeTimeSpecificRangeValue.value.end.toInt()})"),
+                  RangeSlider(
+                    values: appController.backgroundModeTimeSpecificRangeValue.value,
+                    max: 23,
+                    min: 0,
+                    divisions: 24,
+                    labels: RangeLabels(
+                      appController.backgroundModeTimeSpecificRangeValue.value.start.toInt().toString(),
+                      appController.backgroundModeTimeSpecificRangeValue.value.end.toInt().toString(),
+                    ),
+                    onChanged: (RangeValues values) {
+                      print("range slider is changing......");
+                      appController.backgroundModeTimeSpecificRangeValue.value = values;
+
+                    },
+                    onChangeEnd: (RangeValues values){
+                      SharedPrefsUtil.setString(SharedPrefsUtil.KEY_BACKGROUNDMODE_TIME_RANGE, "${values.start.toInt()}:${values.end.toInt()}");
+                      appController.processBackgroundMode();
+                    },
+                  )
+                ],) : SizedBox.shrink(),
+                ),),
+                PopupMenuItem(
+                  child: Obx(()=>  Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Text("Mid Night Background Interval 12:00 AM -> 06:00 AM (${appController.midNightSliderValue.value.toInt()} min)"),
+                      Opacity(
+                        opacity: appController.isSliderEnable.value ? 1 : 0.5,
+                        child: Slider(
+                          value: appController.midNightSliderValue.value,
+                          max: 100,
+                          min: 1,
+                          divisions: 100,
+                          label: appController.midNightSliderValue.toInt().toString(),
+                          onChanged: appController.isSliderEnable.value ?  (double value) {
+                            appController.midNightSliderValue.value = value.toInt().toDouble();
+                          } : null,
+                          onChangeEnd: (value) async{
+                            SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, value.toDouble());
+                            if(isBetweenTime(0,5)) {
+                              await appController.restartBackgroundService();
+                            }
+                          },
+                        ),
+                      ),
+
+
+                    ],
+                  )),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> Column(mainAxisAlignment: MainAxisAlignment.start,children: [
+                    Text("Morning Afternoon Background Interval 6:00 AM -> 4:00 PM (${appController.morningAfterNoonSliderValue.value.toInt()} min)"),
+                     Opacity(
+                       opacity: appController.isSliderEnable.value ? 1 : 0.5,
+                       child: Slider(
+                        value: appController.morningAfterNoonSliderValue.value,
                         max: 100,
                         min: 1,
                         divisions: 100,
-                        label: appController.midNightSliderValue.toInt().toString(),
+                        label: appController.morningAfterNoonSliderValue.toInt().toString(),
                         onChanged: appController.isSliderEnable.value ?  (double value) {
-                          appController.midNightSliderValue.value = value.toInt().toDouble();
+                          appController.morningAfterNoonSliderValue.value = value.toInt().toDouble();
                         } : null,
-                        onChangeEnd: (value) async{
-                          SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, value.toDouble());
-                          if(isBetweenTime(0,5)) {
-                            await appController.restartBackgroundService();
-                          }
-                        },
+                         onChangeEnd: (value) async {
+                           SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, value.toDouble());
+                           if(isBetweenTime(6,15)){
+                             await appController.restartBackgroundService();
+                           }
+                         }
+                                         ),
+                     ),
+
+
+                  ],)),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                    Text("Evening Night Background Interval 4:00 PM -> 12:00 AM (${appController.eveningNightSliderValue.value.toInt()} min)"),
+                    Opacity(
+                      opacity: appController.isSliderEnable.value ? 1 : 0.5,
+                      child: Slider(
+                        value: appController.eveningNightSliderValue.value,
+                        max: 100,
+                        min: 1,
+                        divisions: 100,
+                        label: appController.eveningNightSliderValue.toInt().toString(),
+                        onChanged: appController.isSliderEnable.value ? (double value) {
+                          appController.eveningNightSliderValue.value = value.toInt().toDouble();
+                        } : null,
+                        onChangeEnd: (value) async {
+                          SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER, value.toDouble());
+                          if(isBetweenTime(16,23))
+                            {
+                              await appController.restartBackgroundService();
+                            }
+
+                        }
                       ),
                     ),
-
-
-                  ],
-                )),
-              ),
-              PopupMenuItem(
-                child: Obx(()=> Column(mainAxisAlignment: MainAxisAlignment.start,children: [
-                  Text("Morning Afternoon Background Interval 6:00 AM -> 4:00 PM (${appController.morningAfterNoonSliderValue.value.toInt()} min)"),
-                   Opacity(
-                     opacity: appController.isSliderEnable.value ? 1 : 0.5,
-                     child: Slider(
-                      value: appController.morningAfterNoonSliderValue.value,
-                      max: 100,
-                      min: 1,
-                      divisions: 100,
-                      label: appController.morningAfterNoonSliderValue.toInt().toString(),
-                      onChanged: appController.isSliderEnable.value ?  (double value) {
-                        appController.morningAfterNoonSliderValue.value = value.toInt().toDouble();
-                      } : null,
-                       onChangeEnd: (value) async {
-                         SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, value.toDouble());
-                         if(isBetweenTime(6,15)){
-                           await appController.restartBackgroundService();
-                         }
-                       }
-                                       ),
-                   ),
-
-
-                ],)),
-              ),
-              PopupMenuItem(
-                child: Obx(()=> Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                  Text("Evening Night Background Interval 4:00 PM -> 12:00 AM (${appController.eveningNightSliderValue.value.toInt()} min)"),
-                  Opacity(
-                    opacity: appController.isSliderEnable.value ? 1 : 0.5,
-                    child: Slider(
-                      value: appController.eveningNightSliderValue.value,
-                      max: 100,
-                      min: 1,
-                      divisions: 100,
-                      label: appController.eveningNightSliderValue.toInt().toString(),
-                      onChanged: appController.isSliderEnable.value ? (double value) {
-                        appController.eveningNightSliderValue.value = value.toInt().toDouble();
-                      } : null,
-                      onChangeEnd: (value) async {
-                        SharedPrefsUtil.setDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER, value.toDouble());
-                        if(isBetweenTime(16,23))
-                          {
-                            await appController.restartBackgroundService();
-                          }
-
-                      }
-                    ),
-                  ),
-                ],)),
-              ),
-              PopupMenuItem(
-                child: Obx(()=> Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    Text((appController.isUnfollowUserProcessing.value ? "Unfollow User Uploading in Progress (Interval Duration : ${appController.unfollowCurrentTime.value} min)" :"Unfollow User Background Timer (Interval Duration : ${appController.unfollowCurrentTime.value} min)") + " " + appController.unfollowUploadRemainingTime.value),
-                    Text("Total Unfollowed User : ${appController.totalUnfollowUserUploadedProgress.value}",style: TextStyle(color: Colors.purpleAccent),),
-                    Text("User Uploaded : ${appController.unfollowUserUploaded.value}",style: TextStyle(color: Colors.green),),
-                    Text("Users Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
-                    Text("Users Offline : ${appController.unfollowUserOffline.value}",style: TextStyle(color: Colors.orange),),
-                    Text("Execption Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
-                    Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
-                    Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
-                    Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
-                    // Opacity(
-                    //   opacity: appController.isUnfollowUserProcessing.value ? 0.5 : 1,
-                    //   child: Slider(
-                    //       value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
-                    //       max: 100,
-                    //       min: 1,
-                    //       divisions: 100,
-                    //       label: appController.unfollowUserIntervalSliderValue.toString(),
-                    //       onChanged: !appController.isUnfollowUserProcessing.value ?  (double value) {
-                    //         appController.unfollowUserIntervalSliderValue.value = value.toInt();
-                    //       } : null,
-                    //       onChangeEnd: (value) async {
-                    //         SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
-                    //         await appController.uploadUnfollowUserWithWebView(value.toInt());
-                    //
-                    //       }
-                    //   ),
-                    // ),
                   ],)),
-              )
-            ],
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Text((appController.isUnfollowUserProcessing.value ? "Unfollow User Uploading in Progress (Interval Duration : ${appController.unfollowCurrentTime.value} min)" :"Unfollow User Background Timer (Interval Duration : ${appController.unfollowCurrentTime.value} min)") + " " + appController.unfollowUploadRemainingTime.value),
+                      Text("Total Unfollowed User : ${appController.totalUnfollowUserUploadedProgress.value}",style: TextStyle(color: Colors.purpleAccent),),
+                      Text("User Uploaded : ${appController.unfollowUserUploaded.value}",style: TextStyle(color: Colors.green),),
+                      Text("Users Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
+                      Text("Users Offline : ${appController.unfollowUserOffline.value}",style: TextStyle(color: Colors.orange),),
+                      Text("Execption Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
+                      Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
+                      Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
+                      Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
+                      // Opacity(
+                      //   opacity: appController.isUnfollowUserProcessing.value ? 0.5 : 1,
+                      //   child: Slider(
+                      //       value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
+                      //       max: 100,
+                      //       min: 1,
+                      //       divisions: 100,
+                      //       label: appController.unfollowUserIntervalSliderValue.toString(),
+                      //       onChanged: !appController.isUnfollowUserProcessing.value ?  (double value) {
+                      //         appController.unfollowUserIntervalSliderValue.value = value.toInt();
+                      //       } : null,
+                      //       onChangeEnd: (value) async {
+                      //         SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
+                      //         await appController.uploadUnfollowUserWithWebView(value.toInt());
+                      //
+                      //       }
+                      //   ),
+                      // ),
+                    ],)),
+                )
+              ],
 
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child:Obx(()=>appController.isLoading.value
-              ? Center(child: CircularProgressIndicator()) : Center(
-            // Center is a layout widget. It takes a single child and positions it
-            // in the middle of the parent.
-            child: Column(
-              // Column is also a layout widget. It takes a list of children and
-              // arranges them vertically. By default, it sizes itself to fit its
-              // children horizontally, and tries to be as tall as its parent.
-              //
-              // Column has various properties to control how it sizes itself and
-              // how it positions its children. Here we use mainAxisAlignment to
-              // center the children vertically; the main axis here is the vertical
-              // axis because Columns are vertical (the cross axis would be
-              // horizontal).
-              //
-              // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-              // action in the IDE, or press "p" in the console), to see the
-              // wireframe for each widget.
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child:Obx(()=>appController.isLoading.value
+                ? Center(child: CircularProgressIndicator()) : Center(
+              // Center is a layout widget. It takes a single child and positions it
+              // in the middle of the parent.
+              child: Column(
+                // Column is also a layout widget. It takes a list of children and
+                // arranges them vertically. By default, it sizes itself to fit its
+                // children horizontally, and tries to be as tall as its parent.
+                //
+                // Column has various properties to control how it sizes itself and
+                // how it positions its children. Here we use mainAxisAlignment to
+                // center the children vertically; the main axis here is the vertical
+                // axis because Columns are vertical (the cross axis would be
+                // horizontal).
+                //
+                // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
+                // action in the IDE, or press "p" in the console), to see the
+                // wireframe for each widget.
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
 
-                  Container(
-                  padding: EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(// Background color
-                    borderRadius: BorderRadius.circular(5.0),
-                    border: Border.all(
-                      color: Colors.black, // Border color
-                      width: 2.0,
-                    ),
-                  ), //     <-- TextField expands to this height.
-                  child: TextField(
-                    controller: appController.folderTextEditingController,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      suffixIcon: IconButton(
-                        onPressed: () async {
-                          if(!appController.isGoingToRenameFolder.value)
-                            {
-                              bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
-                              if(!isFolderExists)
+                    Container(
+                    padding: EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(// Background color
+                      borderRadius: BorderRadius.circular(5.0),
+                      border: Border.all(
+                        color: Colors.black, // Border color
+                        width: 2.0,
+                      ),
+                    ), //     <-- TextField expands to this height.
+                    child: TextField(
+                      controller: appController.folderTextEditingController,
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        suffixIcon: IconButton(
+                          onPressed: () async {
+                            if(!appController.isGoingToRenameFolder.value)
                               {
-                                DialogUtils.showLoaderDialog(context,text: "Creating folder.....");
-                                (bool,String) isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
-                                if(isFolderCreated.$1)
+                                bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
+                                if(!isFolderExists)
                                 {
-                                  appController.folderTextEditingController.clear();
-                                  await appController.getFolderList();
-                                  appController.showToast("Folder Created Successfully");
+                                  DialogUtils.showLoaderDialog(context,text: "Creating folder.....");
+                                  (bool,String) isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
+                                  if(isFolderCreated.$1)
+                                  {
+                                    appController.folderTextEditingController.clear();
+                                    await appController.getFolderList();
+                                    appController.showToast("Folder Created Successfully");
+                                  }
+                                  else
+                                  {
+                                    appController.showToast("There is error while creating folder");
+                                  }
+                                  DialogUtils.stopLoaderDialog();
                                 }
                                 else
                                 {
-                                  appController.showToast("There is error while creating folder");
+                                  appController.showToast("Folder already exists");
                                 }
-                                DialogUtils.stopLoaderDialog();
                               }
-                              else
+                            else
                               {
-                                appController.showToast("Folder already exists");
-                              }
-                            }
-                          else
-                            {
-                              DialogUtils.showLoaderDialog(context,text: "Renaming folder....");
-                              bool isUpdated = await appController.renameFolder(appController.folderTextEditingController.text, appController.selectedFolder.value.id!);
-                              if(isUpdated)
-                              {
-                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, appController.folderTextEditingController.text);
-                                appController.folderTextEditingController.clear();
-                                appController.isGoingToRenameFolder.value = false;
-                                appController.update(["updateFolderIcons"]);
-                                appController.showToast("Folder Renamed Successfully...");
-                              }
-                              else
-                              {
-                                appController.showToast("There is error while renaming folder");
-                              }
-                              await appController.getFolderList();
-                              DialogUtils.stopLoaderDialog();
-
-                            }
-
-                        },
-                        icon: Obx(()=> appController.isGoingToRenameFolder.value ? Icon(Icons.update) : Icon(Icons.create_new_folder)),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 10,),
-                Obx(()=>Center(
-                  child: Row(
-                    children: [
-                      /*Expanded(
-                        child: Container(
-                          padding: EdgeInsets.all(8.0),
-                          decoration: BoxDecoration(// Background color
-                            borderRadius: BorderRadius.circular(5.0),
-                            border: Border.all(
-                              color: Colors.black, // Border color
-                              width: 2.0,
-                            ),
-                          ),
-                          child: DropdownButton<StreamTapeFolderItem>(
-                            value: appController.selectedFolder.value,
-                            //iconEnabledColor: AppColors.red,
-                            isExpanded: true,
-                            onChanged: ( newValue) {
-                              appController.selectedFolder.value = newValue!;
-                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, newValue.name!);
-                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, newValue.id!);
-                            },
-                            items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
-                              return DropdownMenuItem<StreamTapeFolderItem>(
-                                value: value,
-                                child: Text("${value.name}"),
-                              );
-                            }).toList(),
-                            //dropdownColor: Colors.black, // Dropdown background color
-                            underline: SizedBox(), // Remove default underline
-                          ),
-                        ),
-                      ),*/
-                      Expanded(
-                        child: Container(
-                          padding: EdgeInsets.all(8.0),
-                          decoration: BoxDecoration(// Background color
-                            borderRadius: BorderRadius.circular(5.0),
-                            border: Border.all(
-                              color: Colors.black, // Border color
-                              width: 2.0,
-                            ),
-                          ),
-                          child: DropDownTextField(
-                            initialValue: appController.selectedFolder.value.name,
-                            textFieldDecoration: InputDecoration(
-                              border: InputBorder.none
-                            ),
-                            clearOption: false,
-                            textFieldFocusNode: textFieldFocusNode,
-                            searchFocusNode: searchFocusNode,
-                            // searchAutofocus: true,
-                            dropDownItemCount: 10,
-                            searchShowCursor: false,
-                            enableSearch: true,
-                            searchKeyboardType: TextInputType.text,
-                            dropDownList: appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
-                              return DropDownValueModel(name: value.name!, value: value.id);
-                            }).toList(),
-                            onChanged: (val) {
-                              appController.selectedFolder.value = StreamTapeFolderItem(name:val.name!,id:val.value!)!;
-                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, val.name!);
-                              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, val.value!);
-                            },
-                          ),
-                        ),
-                      ),
-                      GetBuilder<AppController>(
-                        id:"updateFolderIcons",
-                        builder: (_){
-                          if(!appController.isGoingToRenameFolder.value)
-                            {
-                              return IconButton(
-                                onPressed: () async {
-                                  appController.isGoingToRenameFolder.value = true;
-                                  appController.folderTextEditingController.text = appController.selectedFolder.value.name!;
-                                  appController.update(["updateFolderIcons"]);
-                                },
-                                icon: Icon(Icons.drive_file_rename_outline),
-                              );
-                            }
-                          else
-                            {
-                              return IconButton(
-                                onPressed: () async {
+                                DialogUtils.showLoaderDialog(context,text: "Renaming folder....");
+                                bool isUpdated = await appController.renameFolder(appController.folderTextEditingController.text, appController.selectedFolder.value.id!);
+                                if(isUpdated)
+                                {
+                                  SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, appController.folderTextEditingController.text);
+                                  appController.folderTextEditingController.clear();
                                   appController.isGoingToRenameFolder.value = false;
-                                  appController.folderTextEditingController.text = "";
                                   appController.update(["updateFolderIcons"]);
-                                },
-                                icon: Icon(Icons.cancel),
-                              );
-                            }
-                        },
-                      ),
-                        Obx(()=> Opacity(
-                          opacity: appController.isGoingToRenameFolder.value ? 0.5 : 1,
-                          child: IconButton(
-                              onPressed: appController.isGoingToRenameFolder.value ? null : () async {
-                                ButterflyAlertDialog.show(
-                                  context: Get.context!,
-                                  title: 'Delete',
-                                  subtitle: 'Are sure you want to delete it?',
-                                  alertType: AlertType.delete,
-                                  onConfirm: () async {
-                                    bool isDeleted = await appController.deleteFolder(appController.selectedFolder.value.id!);
-                                    DialogUtils.showLoaderDialog(context,text: "Deleting folder....");
-                                    if(isDeleted)
-                                    {
-                                      appController.showToast("Folder Deleted Successfully...");
-                                    }
-                                    else
-                                    {
-                                      appController.showToast("There is error while deleting folder");
-                                    }
-                                    await appController.getFolderList(isDeleted: true);
-                                    DialogUtils.stopLoaderDialog();
-                                  },
-                                );
-                              },
-                              icon: Icon(Icons.delete_forever),
-                            ),
-                        ),
-                        )
+                                  appController.showToast("Folder Renamed Successfully...");
+                                }
+                                else
+                                {
+                                  appController.showToast("There is error while renaming folder");
+                                }
+                                await appController.getFolderList();
+                                DialogUtils.stopLoaderDialog();
 
-                    ],
-                  ),
-                ),
-                ),
-                SizedBox(height: 10,),
-                Container(
-                  padding: EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(// Background color
-                    borderRadius: BorderRadius.circular(5.0),
-                    border: Border.all(
-                      color: Colors.black, // Border color
-                      width: 2.0,
+                              }
+
+                          },
+                          icon: Obx(()=> appController.isGoingToRenameFolder.value ? Icon(Icons.update) : Icon(Icons.create_new_folder)),
+                        ),
+                      ),
                     ),
                   ),
-                  height: 150, //     <-- TextField expands to this height.
-                  child: TextField(
-                    controller: appController.urlTextEditingController,
-                    maxLines: null, // Set this
-                    expands: true, // and this
-                    keyboardType: TextInputType.multiline,
-                    decoration: InputDecoration(border: InputBorder.none,),
-                    onChanged: (value){
-                      // Move cursor to next line when url is pasted;
-                      if(value.length - previousTextFieldTxt!.length > 1)
-                        {
-                          appController.urlTextEditingController.text = value + "\n";
-                          previousTextFieldTxt = value + "\n";
-                          return;
-                        }
-                      previousTextFieldTxt = value;
+                  SizedBox(height: 10,),
+                  Obx(()=>Center(
+                    child: Row(
+                      children: [
+                        /*Expanded(
+                          child: Container(
+                            padding: EdgeInsets.all(8.0),
+                            decoration: BoxDecoration(// Background color
+                              borderRadius: BorderRadius.circular(5.0),
+                              border: Border.all(
+                                color: Colors.black, // Border color
+                                width: 2.0,
+                              ),
+                            ),
+                            child: DropdownButton<StreamTapeFolderItem>(
+                              value: appController.selectedFolder.value,
+                              //iconEnabledColor: AppColors.red,
+                              isExpanded: true,
+                              onChanged: ( newValue) {
+                                appController.selectedFolder.value = newValue!;
+                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, newValue.name!);
+                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, newValue.id!);
+                              },
+                              items:appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                                return DropdownMenuItem<StreamTapeFolderItem>(
+                                  value: value,
+                                  child: Text("${value.name}"),
+                                );
+                              }).toList(),
+                              //dropdownColor: Colors.black, // Dropdown background color
+                              underline: SizedBox(), // Remove default underline
+                            ),
+                          ),
+                        ),*/
+                        Expanded(
+                          child: Container(
+                            padding: EdgeInsets.all(8.0),
+                            decoration: BoxDecoration(// Background color
+                              borderRadius: BorderRadius.circular(5.0),
+                              border: Border.all(
+                                color: Colors.black, // Border color
+                                width: 2.0,
+                              ),
+                            ),
+                            child: DropDownTextField(
+                              initialValue: appController.selectedFolder.value.name,
+                              textFieldDecoration: InputDecoration(
+                                border: InputBorder.none
+                              ),
+                              clearOption: false,
+                              textFieldFocusNode: textFieldFocusNode,
+                              searchFocusNode: searchFocusNode,
+                              // searchAutofocus: true,
+                              dropDownItemCount: 10,
+                              searchShowCursor: false,
+                              enableSearch: true,
+                              searchKeyboardType: TextInputType.text,
+                              dropDownList: appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                                return DropDownValueModel(name: value.name!, value: value.id);
+                              }).toList(),
+                              onChanged: (val) {
+                                appController.selectedFolder.value = StreamTapeFolderItem(name:val.name!,id:val.value!)!;
+                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, val.name!);
+                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, val.value!);
+                              },
+                            ),
+                          ),
+                        ),
+                        GetBuilder<AppController>(
+                          id:"updateFolderIcons",
+                          builder: (_){
+                            if(!appController.isGoingToRenameFolder.value)
+                              {
+                                return IconButton(
+                                  onPressed: () async {
+                                    appController.isGoingToRenameFolder.value = true;
+                                    appController.folderTextEditingController.text = appController.selectedFolder.value.name!;
+                                    appController.update(["updateFolderIcons"]);
+                                  },
+                                  icon: Icon(Icons.drive_file_rename_outline),
+                                );
+                              }
+                            else
+                              {
+                                return IconButton(
+                                  onPressed: () async {
+                                    appController.isGoingToRenameFolder.value = false;
+                                    appController.folderTextEditingController.text = "";
+                                    appController.update(["updateFolderIcons"]);
+                                  },
+                                  icon: Icon(Icons.cancel),
+                                );
+                              }
+                          },
+                        ),
+                          Obx(()=> Opacity(
+                            opacity: appController.isGoingToRenameFolder.value ? 0.5 : 1,
+                            child: IconButton(
+                                onPressed: appController.isGoingToRenameFolder.value ? null : () async {
+                                  ButterflyAlertDialog.show(
+                                    context: Get.context!,
+                                    title: 'Delete',
+                                    subtitle: 'Are sure you want to delete it?',
+                                    alertType: AlertType.delete,
+                                    onConfirm: () async {
+                                      bool isDeleted = await appController.deleteFolder(appController.selectedFolder.value.id!);
+                                      DialogUtils.showLoaderDialog(context,text: "Deleting folder....");
+                                      if(isDeleted)
+                                      {
+                                        appController.showToast("Folder Deleted Successfully...");
+                                      }
+                                      else
+                                      {
+                                        appController.showToast("There is error while deleting folder");
+                                      }
+                                      await appController.getFolderList(isDeleted: true);
+                                      DialogUtils.stopLoaderDialog();
+                                    },
+                                  );
+                                },
+                                icon: Icon(Icons.delete_forever),
+                              ),
+                          ),
+                          )
+
+                      ],
+                    ),
+                  ),
+                  ),
+                  SizedBox(height: 10,),
+                  Container(
+                    padding: EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(// Background color
+                      borderRadius: BorderRadius.circular(5.0),
+                      border: Border.all(
+                        color: Colors.black, // Border color
+                        width: 2.0,
+                      ),
+                    ),
+                    height: 150, //     <-- TextField expands to this height.
+                    child: TextField(
+                      controller: appController.urlTextEditingController,
+                      maxLines: null, // Set this
+                      expands: true, // and this
+                      keyboardType: TextInputType.multiline,
+                      decoration: InputDecoration(border: InputBorder.none,),
+                      onChanged: (value){
+                        // Move cursor to next line when url is pasted;
+                        if(value.length - previousTextFieldTxt!.length > 1)
+                          {
+                            appController.urlTextEditingController.text = value + "\n";
+                            previousTextFieldTxt = value + "\n";
+                            return;
+                          }
+                        previousTextFieldTxt = value;
+                      },
+                    ),
+                  ),
+                  SizedBox(height: 10,),
+                  GetBuilder<AppController>(
+                    id: "updateDownloadingList",
+                    builder: (_)
+                    {
+                      return Column(
+
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
+                                SizedBox(width: 10,),
+                                Obx(()=>appController.isDownloadStatusUpdating.value ? Center(child: SizedBox(height: 36,width: 36, child: CircularProgressIndicator()),)  :IconButton(
+                                  onPressed: () async {
+                                      if (!appController.isConcurrentProcessing.value) {
+                                        await appController.getDownloadingVideoStatus();
+                                      } else {
+                                        await appController.getConcurrentDownloadingVideoStatus();
+                                      }
+                                    }, icon: Icon(Icons.refresh),iconSize: 36,))
+                          ],),
+
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            //height: 300,
+                            child: ListView.builder(
+                                shrinkWrap: true,
+                                physics: NeverScrollableScrollPhysics(),
+                                controller: appController.scrollController,
+                                itemCount: appController.downloadingList.length,
+                                itemBuilder: (context,index){
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    child: Row(
+                                      children: [
+                                        Text((index+1).toString(),style:TextStyle(fontSize: 15,color: getTextColor(appController.downloadingList[index]!.status!) )),
+                                        SizedBox(width: 5,),
+                                        GetBuilder<AppController>(
+                                          id : "updateVideoThumbnail",
+                                          builder: (_) {
+                                            return InkWell(
+                                              onTap: () async {
+                                                await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                                              },
+                                              child: SizedBox(
+                                                height: 150,
+                                                width: 100,
+                                                child: appController.downloadingList[index]!.imageBytes == null ? Text("No Image Found") : Image.memory(appController.downloadingList[index]!.imageBytes!,)
+                                              ),
+                                            );
+                                          },
+
+                                        ),
+                                        Expanded(child: Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
+                                        )),
+                                        Obx( ()=> !appController.downloadingList[index].isThumbnailUpdating!.value ? IconButton(onPressed: () async {
+                                          appController.downloadingList[index].isThumbnailUpdating!.value = true;
+                                            await appController.updateVideoThumbnail(appController.downloadingList[index]);
+                                          appController.downloadingList[index].isThumbnailUpdating!.value = false;
+                                          }, icon: Icon(Icons.refresh),iconSize: 24,) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,))
+                                        ),
+                                        IconButton(onPressed: () async {
+                                          await appController.showDeleteRemoteUploadingDialog(appController.downloadingList[index]!.id!);
+                                        }, icon: Icon(Icons.delete),iconSize: 24,),
+                                        appController.downloadingList[index]!.isUnfollowUser! ? Container(width: 12,height: 12,decoration: BoxDecoration(color:Colors.green,shape: BoxShape.circle),) : SizedBox.shrink(),
+
+                                      ],
+                                    ),
+                                  );
+                                  // return ListTile(onTap: () async {
+                                  //   await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                                  // },
+                                  //  leading: Text((index+1).toString(),style:TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) )),
+                                  //  title: Padding(
+                                  //  padding: const EdgeInsets.all(8.0),
+                                  //  child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
+                                  // ));
+                                }),
+                          )
+                        ],
+                      );
                     },
                   ),
-                ),
-                SizedBox(height: 10,),
-                GetBuilder<AppController>(
-                  id: "updateDownloadingList",
-                  builder: (_)
-                  {
-                    return Column(
-
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
-                              SizedBox(width: 10,),
-                              Obx(()=>appController.isDownloadStatusUpdating.value ? Center(child: SizedBox(height: 36,width: 36, child: CircularProgressIndicator()),)  :IconButton(
-                                onPressed: () async {
-                                    if (!appController.isConcurrentProcessing.value) {
-                                      await appController.getDownloadingVideoStatus();
-                                    } else {
-                                      await appController.getConcurrentDownloadingVideoStatus();
-                                    }
-                                  }, icon: Icon(Icons.refresh),iconSize: 36,))
-                        ],),
-
-                        Container(
-                          padding: EdgeInsets.all(12),
-                          //height: 300,
-                          child: ListView.builder(
-                              shrinkWrap: true,
-                              physics: NeverScrollableScrollPhysics(),
-                              controller: appController.scrollController,
-                              itemCount: appController.downloadingList.length,
-                              itemBuilder: (context,index){
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  child: Row(
-                                    children: [
-                                      Text((index+1).toString(),style:TextStyle(fontSize: 15,color: getTextColor(appController.downloadingList[index]!.status!) )),
-                                      SizedBox(width: 5,),
-                                      GetBuilder<AppController>(
-                                        id : "updateVideoThumbnail",
-                                        builder: (_) {
-                                          return InkWell(
-                                            onTap: () async {
-                                              await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
-                                            },
-                                            child: SizedBox(
-                                              height: 150,
-                                              width: 100,
-                                              child: appController.downloadingList[index]!.imageBytes == null ? Text("No Image Found") : Image.memory(appController.downloadingList[index]!.imageBytes!,)
-                                            ),
-                                          );
-                                        },
-
-                                      ),
-                                      Expanded(child: Padding(
-                                        padding: const EdgeInsets.all(8.0),
-                                        child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
-                                      )),
-                                      Obx( ()=> !appController.downloadingList[index].isThumbnailUpdating!.value ? IconButton(onPressed: () async {
-                                        appController.downloadingList[index].isThumbnailUpdating!.value = true;
-                                          await appController.updateVideoThumbnail(appController.downloadingList[index]);
-                                        appController.downloadingList[index].isThumbnailUpdating!.value = false;
-                                        }, icon: Icon(Icons.refresh),iconSize: 24,) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,))
-                                      ),
-                                      IconButton(onPressed: () async {
-                                        await appController.showDeleteRemoteUploadingDialog(appController.downloadingList[index]!.id!);
-                                      }, icon: Icon(Icons.delete),iconSize: 24,),
-                                      appController.downloadingList[index]!.isUnfollowUser! ? Container(width: 12,height: 12,decoration: BoxDecoration(color:Colors.green,shape: BoxShape.circle),) : SizedBox.shrink(),
-
-                                    ],
-                                  ),
-                                );
-                                // return ListTile(onTap: () async {
-                                //   await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
-                                // },
-                                //  leading: Text((index+1).toString(),style:TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) )),
-                                //  title: Padding(
-                                //  padding: const EdgeInsets.all(8.0),
-                                //  child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
-                                // ));
-                              }),
-                        )
-                      ],
-                    );
-                  },
-                ),
-              ],
-            ),
-          ))
-        ),
-      ),
-      floatingActionButton: Obx(()=> Opacity(
-        opacity: appController.isUploading.value ? 0.5 : 1,
-        child: FloatingActionButton(
-            onPressed: !appController.isUploading.value ? () async  {
-                FocusManager.instance.primaryFocus?.unfocus();
-               if(appController.isConcurrentProcessing.value)
-                 {
-                   await appController.concurrentStartUploading(appController.urlTextEditingController.text);
-                 }
-               else
-                 {
-                   await appController.startUploading(appController.urlTextEditingController.text);
-                 }
-               await Future.delayed(Duration(seconds: 1));
-               //if (!appController.isDownloadStatusUpdating.value) {
-               await appController.downloadingCompleter.future;
-               if (!appController.isConcurrentProcessing.value) {
-                 await appController.getDownloadingVideoStatus(isSync: true);
-               } else {
-                 await appController.getConcurrentDownloadingVideoStatus(isSync: true);
-               }
-               //}
-               appController.urlTextEditingController.clear();
-               previousTextFieldTxt = "";
-            } : null,
-            tooltip: 'Upload',
-            child: !appController.isUploading.value ? const Icon(Icons.upload) : CircularProgressIndicator(),
+                ],
+              ),
+            ))
           ),
+        ),
+        floatingActionButton: Obx(()=> Opacity(
+          opacity: appController.isUploading.value ? 0.5 : 1,
+          child: FloatingActionButton(
+              onPressed: !appController.isUploading.value ? () async  {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                 if(appController.isConcurrentProcessing.value)
+                   {
+                     await appController.concurrentStartUploading(appController.urlTextEditingController.text);
+                   }
+                 else
+                   {
+                     await appController.startUploading(appController.urlTextEditingController.text);
+                   }
+                 await Future.delayed(Duration(seconds: 1));
+                 //if (!appController.isDownloadStatusUpdating.value) {
+                 await appController.downloadingCompleter.future;
+                 if (!appController.isConcurrentProcessing.value) {
+                   await appController.getDownloadingVideoStatus(isSync: true);
+                 } else {
+                   await appController.getConcurrentDownloadingVideoStatus(isSync: true);
+                 }
+                 //}
+                 appController.urlTextEditingController.clear();
+                 previousTextFieldTxt = "";
+              } : null,
+              tooltip: 'Upload',
+              child: !appController.isUploading.value ? const Icon(Icons.upload) : CircularProgressIndicator(),
+            ),
+        ),
+        ), // This trailing comma makes auto-formatting nicer for build methods.
       ),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
