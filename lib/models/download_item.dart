@@ -1,5 +1,7 @@
 
 
+import 'dart:typed_data';
+
 import 'package:get/get.dart';
 
 class DownloadItem
@@ -16,5 +18,9 @@ class DownloadItem
 
   RxBool? isSelected;
 
-  DownloadItem(this.name, this.downloadUrl,this.imageUrl,this.streamTapeUrl,this.isLoading,this.isSelected);
+  Uint8List? imageBytes;
+
+  bool? isUrlImage = false;
+
+  DownloadItem(this.name, this.downloadUrl,this.imageUrl,this.streamTapeUrl,this.isLoading,this.isSelected,this.imageBytes,this.isUrlImage);
 }

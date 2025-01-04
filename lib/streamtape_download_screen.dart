@@ -3,14 +3,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
+import 'package:kuaishou_remote_uploader/dialogs/video_player_dialog.dart';
 import 'package:kuaishou_remote_uploader/models/download_item.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
+import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
 
-class StreamtapeDownloadScreen extends StatelessWidget {
+class StreamtapeDownloadScreen extends StatefulWidget {
   StreamtapeDownloadScreen({super.key});
 
+  @override
+  State<StreamtapeDownloadScreen> createState() => _StreamtapeDownloadScreenState();
+}
+
+class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
   AppController appController = Get.find<AppController>();
+
+
+  @override
+  void initState() {
+    appController.selectedDownloadFolder.value = appController.streamTapeFolder!.folders!.first;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -211,12 +224,19 @@ class StreamtapeDownloadScreen extends StatelessWidget {
                                         builder: (_) {
                                           return InkWell(
                                             onTap: () async {
+                                              if (appController.currentDownloadList[index]!.downloadUrl! != null && appController.currentDownloadList[index]!.downloadUrl!.isNotEmpty) {
+                                                await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.currentDownloadList[index]!.downloadUrl!,isToShowSlider: true);
+                                              }
+                                              else
+                                                {
+                                                  appController.showToast("Load downlaod link first.....");
+                                                }
 
                                             },
                                             child: SizedBox(
-                                                height: 80,
-                                                width: 80,
-                                                child: appController.currentDownloadList[index]!.imageUrl!.isEmpty ? Text("No Image Found") : Image.network(appController.currentDownloadList[index]!.imageUrl!)
+                                                height: 150,
+                                                width: 150,
+                                                child: !appController.currentDownloadList[index]!.isUrlImage! ? appController.currentDownloadList[index]!.imageUrl!.isEmpty ?   Text("No Image Found") : Image.network(appController.currentDownloadList[index]!.imageUrl!) : appController.currentDownloadList[index]!.imageBytes != null && appController.currentDownloadList[index]!.imageBytes!.isNotEmpty ? Image.memory(appController.currentDownloadList[index]!.imageBytes!) : Text("No Image Found")
                                             ),
                                           );
                                         },
@@ -234,7 +254,20 @@ class StreamtapeDownloadScreen extends StatelessWidget {
                                         height: 28,
                                         width: 28,
                                         child: IconButton(onPressed: () async {
-                                              await appController.fetchStreamTapeImageAndDownloadUrl(appController.currentDownloadList[index]);
+                                              if (!appController.currentDownloadList[index]!.isUrlImage!) {
+                                                await appController.fetchStreamTapeImageAndDownloadUrl(appController.currentDownloadList[index]);
+                                              }
+                                              else
+                                                {
+                                                  try {
+                                                    appController.currentDownloadList[index]!.isLoading!.value = true;
+                                                    appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 500);
+                                                  } catch (e) {
+                                                    print(e);
+                                                  }
+                                                  appController.currentDownloadList[index]!.isLoading!.value = false;
+                                                }
+                                              appController.update(["updateStreamtapeDownloadingList"]);
                                               appController.update(["updateCopyFloatingActionButtonVisibility"]);
                                           }, icon: appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]) ? Icon(Icons.refresh) :Icon(Icons.download),iconSize: 20,),
                                       ) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,)),
@@ -255,6 +288,24 @@ class StreamtapeDownloadScreen extends StatelessWidget {
 
                                         }, icon: Icon(Icons.copy),iconSize: 20),
                                       ),
+                                      SizedBox(
+                                        height: 28,
+                                        width: 28,
+                                        child: IconButton(onPressed: () async {
+                                          appController.currentDownloadList[index]!.isUrlImage = !appController.currentDownloadList[index]!.isUrlImage!;
+                                          if(appController.currentDownloadList[index]!.isUrlImage! && (appController.currentDownloadList[index]!.imageBytes! == null  || appController.currentDownloadList[index]!.imageBytes!.isEmpty)){
+                                            try {
+                                              appController.currentDownloadList[index]!.isLoading!.value = true;
+                                              appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 500);
+                                            } catch (e) {
+                                              print(e);
+                                            }
+                                            appController.currentDownloadList[index]!.isLoading!.value = false;
+                                          }
+                                          appController.update(["updateStreamtapeDownloadingList"]);
+
+                                        }, icon: Icon(Icons.image),iconSize: 20,color: !appController.currentDownloadList[index]!.isUrlImage! ? Colors.deepPurple : Colors.green,),
+                                      )
                                     ],
                                   ),
                                 ),

@@ -1231,7 +1231,7 @@ class   AppController extends GetxController {
       //String dlUrl = "https:/" + ideooLink + "&dl=1s";
       return (dlUrl, imageUrl);
     } catch (e) {
-      Fluttertoast.showToast(msg: "", toastLength: Toast.LENGTH_LONG, backgroundColor: Colors.red);
+      Fluttertoast.showToast(msg: "Unable to get Streamtape downoad url", toastLength: Toast.LENGTH_LONG, backgroundColor: Colors.red);
     }
   }
 
@@ -1259,7 +1259,7 @@ class   AppController extends GetxController {
     StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
     streamTapeFolder.files!.sort((a, b) => a.name!.toLowerCase().compareTo(b.name!.toLowerCase()));
     for (StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!) {
-      downloadLinksList.add(DownloadItem(streamtapeFileItem.name, "Press Download icon to get link....", "", streamtapeFileItem.link!, false.obs, false.obs));
+      downloadLinksList.add(DownloadItem(streamtapeFileItem.name, "Press Download icon to get link....", "", streamtapeFileItem.link!, false.obs, false.obs,Uint8List.fromList([]),false));
       //stringBuffer.write(mp4ImageUrl.$1! +"\n\n");
       //downloadLinks.value = stringBuffer.toString();
       this.update(["updateStreamtapeDownloadingList"]);
@@ -1275,7 +1275,6 @@ class   AppController extends GetxController {
     //if (downloadItem!.downloadUrl == null || downloadItem!.downloadUrl == "Press Download icon to get link...."  || downloadItem!.downloadUrl == "Unable to get download url....") {
     try {
       (String?, String?)? mp4ImageUrl = await getMp4UrlFromStreamTape(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: true);
-
       downloadItem!.downloadUrl = mp4ImageUrl!.$1 != null ? mp4ImageUrl!.$1 : "Unable to get download url....";
       downloadItem!.imageUrl = mp4ImageUrl!.$2 != null ? mp4ImageUrl!.$2 : "";
     } catch (e) {
