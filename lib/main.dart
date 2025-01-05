@@ -187,8 +187,9 @@ Timer unfollowLaunchTimer(Duration duration,{ required Function callback})
 int getUnfollowMin(List<UserKuaishou> userList)
 {
   int userListSize = userList.length;
-  int randomMin = getIntBetweenRange(9, 14);
-  int totalminPerUser = ((userListSize * getIntBetweenRange(35,40)) / 60).ceil() ;
+  int intervalMin = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 5);
+  int randomMin = getIntBetweenRange(intervalMin, intervalMin + 3);
+  int totalminPerUser = ((userListSize * getIntBetweenRange(5,10)) / 60).ceil() ;
   int totalMin = totalminPerUser + randomMin;
   return totalMin;
 }
@@ -800,24 +801,20 @@ class _MyHomePageState extends State<MyHomePage> {
                       Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
                       Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
                       Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
-                      // Opacity(
-                      //   opacity: appController.isUnfollowUserProcessing.value ? 0.5 : 1,
-                      //   child: Slider(
-                      //       value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
-                      //       max: 100,
-                      //       min: 1,
-                      //       divisions: 100,
-                      //       label: appController.unfollowUserIntervalSliderValue.toString(),
-                      //       onChanged: !appController.isUnfollowUserProcessing.value ?  (double value) {
-                      //         appController.unfollowUserIntervalSliderValue.value = value.toInt();
-                      //       } : null,
-                      //       onChangeEnd: (value) async {
-                      //         SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
-                      //         await appController.uploadUnfollowUserWithWebView(value.toInt());
-                      //
-                      //       }
-                      //   ),
-                      // ),
+                      Slider(
+                          value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
+                          max: 15,
+                          min: 5,
+                          divisions: 10,
+                          label: appController.unfollowUserIntervalSliderValue.toString(),
+                          onChanged: (double value) {
+                            appController.unfollowUserIntervalSliderValue.value = value.toInt();
+                          },
+                          onChangeEnd: (value) async {
+                            SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
+
+                          }
+                      ),
                     ],)),
                 )
               ],

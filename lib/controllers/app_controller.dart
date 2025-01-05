@@ -109,7 +109,7 @@ class   AppController extends GetxController {
   RxDouble midNightSliderValue = 1.0.obs; // 12:
   RxDouble morningAfterNoonSliderValue = 1.0.obs;
   RxDouble eveningNightSliderValue = 1.0.obs; //
-  RxInt unfollowUserIntervalSliderValue = 1.obs; //
+  RxInt unfollowUserIntervalSliderValue = 5.obs; //
   RxInt unfollowCurrentTime = 1.obs; //
   Timer? backgroundModeTimer;
   RxBool isSliderEnable = true.obs;
@@ -156,15 +156,17 @@ class   AppController extends GetxController {
     midNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, defaultValue: 15); // 12:00 AM -> 06:00 AM
     morningAfterNoonSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, defaultValue: 10); // 6:00 AM -> 4:00 PM
     eveningNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER, defaultValue: 7); // 4:00 PM -> 12:00 AM
-    unfollowUserIntervalSliderValue.value = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, defaultValue: 15); // 4:00 PM -> 12:00 AM
+    unfollowUserIntervalSliderValue.value = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, defaultValue: 5); // 4:00 PM -> 12:00 AM
     downloadingListIdBox = await Hive.openBox("downloadingListId");
     usernameListIdBox = await Hive.openBox("usernameListIdBox");
     unfollowUserUrlListBox = await Hive.openBox("unfollowUserUrlListBox");
     String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
     String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
+    String cookieKuaishou = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
+    bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
 
-    await verifyCaptcha();
-    if(cookie.isNotEmpty && cookie.isNotEmpty)
+
+    if(cookie.isNotEmpty && csrf.isNotEmpty && cookieKuaishou.isNotEmpty && !isCaptchaRequired)
     {
       await initiateUnfollowUploadingProcess();
     }
@@ -223,16 +225,17 @@ class   AppController extends GetxController {
             //initTimer();
             isLoading.value = false;
             showToast("Webpage Loading Completed .....");
-            if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_FIRST_TIME)) {
-              SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_FIRST_TIME, true);
-              bool result = await importUsersToHive(isSilent: true);
-            }
-            await startServicesIfUserAvailable();
             if (!isConcurrentProcessing.value) {
               await getDownloadingVideoStatus();
             } else {
               await getConcurrentDownloadingVideoStatus();
             }
+            await verifyCaptcha();
+            if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_FIRST_TIME)) {
+              SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_FIRST_TIME, true);
+              bool result = await importUsersToHive(isSilent: true);
+            }
+            await startServicesIfUserAvailable();
             return;
           }
           // Click on login or account panel
@@ -1694,7 +1697,7 @@ class   AppController extends GetxController {
               print(e);
             }
             totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
-            await Future.delayed(Duration(seconds: getIntBetweenRange(35, 40)));
+            await Future.delayed(Duration(seconds: getIntBetweenRange(5, 10)));
 
         }
         isUnfollowUserProcessing.value = false;
