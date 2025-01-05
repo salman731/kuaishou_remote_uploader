@@ -1697,7 +1697,7 @@ class   AppController extends GetxController {
               print(e);
             }
             totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
-            await Future.delayed(Duration(seconds: getIntBetweenRange(15, 25)));
+            await Future.delayed(Duration(seconds: getIntBetweenRange(20, 30)));
 
         }
         isUnfollowUserProcessing.value = false;
