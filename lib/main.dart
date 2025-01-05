@@ -189,7 +189,8 @@ int getUnfollowMin(List<UserKuaishou> userList)
   int userListSize = userList.length;
   int intervalMin = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 5);
   int randomMin = getIntBetweenRange(intervalMin, intervalMin + 3);
-  int totalminPerUser = ((userListSize * getIntBetweenRange(20,30)) / 60).ceil() ;
+  RangeValues rangeValues = AppController.getRangeValuesFromString(SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL,defaultValue: "15:25"));
+  int totalminPerUser = ((userListSize * getIntBetweenRange(rangeValues.start.toInt(),rangeValues.end.toInt())) / 60).ceil() ;
   int totalMin = totalminPerUser + randomMin;
   return totalMin;
 }
@@ -801,6 +802,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
                       Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
                       Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
+                      Text("Unfollow Timer Interval (Unfollow Users)"),
                       Slider(
                           value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
                           max: 15,
@@ -809,12 +811,32 @@ class _MyHomePageState extends State<MyHomePage> {
                           label: appController.unfollowUserIntervalSliderValue.toString(),
                           onChanged: (double value) {
                             appController.unfollowUserIntervalSliderValue.value = value.toInt();
-                          },
+                          }, 
                           onChangeEnd: (value) async {
                             SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
 
+
                           }
                       ),
+                      Text("Unfollow Api Interval (${appController.unfollowApiIntervalRangeValue.value.start.toInt()} -> ${appController.unfollowApiIntervalRangeValue.value.end.toInt()})"),
+                      RangeSlider(
+                        values: appController.unfollowApiIntervalRangeValue.value,
+                        max: 60,
+                        min: 5,
+                        divisions: 55,
+                        labels: RangeLabels(
+                          appController.unfollowApiIntervalRangeValue.value.start.toInt().toString(),
+                          appController.unfollowApiIntervalRangeValue.value.end.toInt().toString(),
+                        ),
+                        onChanged: (RangeValues values) {
+                          print("range slider is changing......");
+                          appController.unfollowApiIntervalRangeValue.value = values;
+
+                        },
+                        onChangeEnd: (RangeValues values){
+                          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL, "${values.start.toInt()}:${values.end.toInt()}");
+                        },
+                      )
                     ],)),
                 )
               ],

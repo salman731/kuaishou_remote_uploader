@@ -115,6 +115,7 @@ class   AppController extends GetxController {
   RxBool isSliderEnable = true.obs;
   Rx<BackgroundModeTimeEnum> backgroundModeTimeEnumRadioValue = BackgroundModeTimeEnum.ALLTIME.obs;
   Rx<RangeValues> backgroundModeTimeSpecificRangeValue = const RangeValues(0, 6).obs;
+  Rx<RangeValues> unfollowApiIntervalRangeValue = const RangeValues(15, 25).obs;
   RxBool isBackgroundModeRangeSliderVisible = false.obs;
   RxBool isBackGroundModeTimeRadioButtonsVisible = false.obs;
   Timer? unfollowUserTimer;
@@ -157,6 +158,7 @@ class   AppController extends GetxController {
     morningAfterNoonSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, defaultValue: 10); // 6:00 AM -> 4:00 PM
     eveningNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_EVENINGNIGHT_SLIDER, defaultValue: 7); // 4:00 PM -> 12:00 AM
     unfollowUserIntervalSliderValue.value = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, defaultValue: 5); // 4:00 PM -> 12:00 AM
+    unfollowApiIntervalRangeValue.value = getRangeValuesFromString(SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL, defaultValue: "15:25"));
     downloadingListIdBox = await Hive.openBox("downloadingListId");
     usernameListIdBox = await Hive.openBox("usernameListIdBox");
     unfollowUserUrlListBox = await Hive.openBox("unfollowUserUrlListBox");
@@ -1697,7 +1699,8 @@ class   AppController extends GetxController {
               print(e);
             }
             totalUnfollowUserUploadedProgress.value = "${listFiltered.indexOf(userKuaishou)+1}/${listFiltered.length}";
-            await Future.delayed(Duration(seconds: getIntBetweenRange(20, 30)));
+            RangeValues rangeValues = getRangeValuesFromString(SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL,defaultValue: "15:25"));
+            await Future.delayed(Duration(seconds: getIntBetweenRange(rangeValues.start.toInt(), rangeValues.end.toInt())));
 
         }
         isUnfollowUserProcessing.value = false;
@@ -1862,6 +1865,14 @@ class   AppController extends GetxController {
         SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, rootFolder!.folders!.first.id!);
       }
     }
+  }
+
+  static RangeValues getRangeValuesFromString (String value)
+  {
+    List<String> valueList = value.split(":");
+    double start = double.parse(valueList[0]);
+    double end = double.parse(valueList[1]);
+    return RangeValues(start, end);
   }
 
 }
