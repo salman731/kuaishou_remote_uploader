@@ -189,7 +189,7 @@ int getUnfollowMin(List<UserKuaishou> userList)
   int userListSize = userList.length;
   int intervalMin = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 5);
   int randomMin = getIntBetweenRange(intervalMin, intervalMin + 3);
-  int totalminPerUser = ((userListSize * getIntBetweenRange(5,10)) / 60).ceil() ;
+  int totalminPerUser = ((userListSize * getIntBetweenRange(15,25)) / 60).ceil() ;
   int totalMin = totalminPerUser + randomMin;
   return totalMin;
 }
