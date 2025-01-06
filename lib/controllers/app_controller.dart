@@ -411,12 +411,12 @@ class   AppController extends GetxController {
     );
   }
 
-  Future<void> showDeleteDialog(Function onConfirm) async
+  Future<void> showDeleteDialog(Function onConfirm,{String? title,String? msg}) async
   {
     ButterflyAlertDialog.show(
       context: Get.context!,
-      title: 'Delete',
-      subtitle: 'Are sure you want to delete it?',
+      title: title ?? 'Delete',
+      subtitle: msg ?? 'Are sure you want to delete it?',
       alertType: AlertType.delete,
       onConfirm: () async {
         onConfirm();
@@ -629,133 +629,133 @@ class   AppController extends GetxController {
 
   }
 
-  Future<(String, String, Map<String, bool>)> getDirectKuaishouFlvUrl_Background(String username, String shareToken, String cookie) async
-  {
-    Map<String, bool> liveStatusMap = <String, bool>{"online": false, "apiError": false, "exceptionError": false, "offline": false};
-    String cookie = "did=web_5db7f4c0d9664902af774fd08ebdf769; didv=1730628699000";
-    String finalFlvUrl = "";
-    String finalUrl = "https://live.kuaishou.com/u/${username}";
-    //String shareToken = "X9BGeAzPhrZX1bs";
-    String? orginalLink = "";
-    String error = "";
-    /*try {
-      orginalLink = await WebUtils.getOriginalUrl(finalUrl,headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 14; 23129RAA4G Build/UKQ1.231207.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.107 Mobile Safari/537.36"},timeout: Duration(seconds: 25));
-    } catch (e) {
-      print(e);
-    }*/
-    try {
+  // Future<(String, String, Map<String, bool>)> getDirectKuaishouFlvUrl_Background(String username, String shareToken, String cookie) async
+  // {
+  //   Map<String, bool> liveStatusMap = <String, bool>{"online": false, "apiError": false, "exceptionError": false, "offline": false};
+  //   String cookie = "did=web_5db7f4c0d9664902af774fd08ebdf769; didv=1730628699000";
+  //   String finalFlvUrl = "";
+  //   String finalUrl = "https://live.kuaishou.com/u/${username}";
+  //   //String shareToken = "X9BGeAzPhrZX1bs";
+  //   String? orginalLink = "";
+  //   String error = "";
+  //   /*try {
+  //     orginalLink = await WebUtils.getOriginalUrl(finalUrl,headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 14; 23129RAA4G Build/UKQ1.231207.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.107 Mobile Safari/537.36"},timeout: Duration(seconds: 25));
+  //   } catch (e) {
+  //     print(e);
+  //   }*/
+  //   try {
+  //
+  //     /*if(orginalLink == null || orginalLink!.isEmpty)
+  //       {
+  //         WebViewUtils webViewUtils = WebViewUtils();
+  //         orginalLink = await webViewUtils.getUrlWithWebView(finalUrl!, "",isBackground: true);
+  //         await webViewUtils.disposeWebView();
+  //       }*/
+  //     if (orginalLink!.isEmpty) {
+  //       orginalLink = KOUAISHOU_MAIN_MOBILE_URL + username + "?cc=share_wxms&followRefer=151&shareMethod=CARD&kpn=GAME_ZONE&subBiz=LIVE_STEARM_OUTSIDE&shareToken=$shareToken&shareMode=APP&efid=0";
+  //     }
+  //     Uri orginalUri = Uri.parse(orginalLink!);
+  //     String? eid = orginalUri.path
+  //         .split("/")
+  //         .last;
+  //     String? efid = "0";
+  //     var requestMap = {"efid": efid, "eid": eid, "source": 6, "shareMethod": "card", "clientType": "WEB_OUTSIDE_SHARE_H5"};
+  //     var headers = {
+  //       "Referer": orginalLink,
+  //       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  //       "Content-Type": "application/json",
+  //       "Accept-Encoding": "gzip, deflate, br",
+  //       "Accept": "*/*",
+  //       "Cookie": cookie
+  //     };
+  //     //  var headers = {"Accept": "*/*",
+  //     //    "Accept-Encoding": "gzip, deflate, br",
+  //     //    "Accept-Language": "en-US,en;q=0.9,ur;q=0.8",
+  //     //    "Access-Control-Allow-Credentials": "true",
+  //     //    "Content-Type": "application/json",
+  //     //    "Cookie": cookie,
+  //     //    "Host": "livev.m.chenzhongtech.com",
+  //     //    "Origin": "https://livev.m.chenzhongtech.com",
+  //     //    "Referer": orginalLink,
+  //     //    "Sec-Ch-Ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+  //     //    "Sec-Ch-Ua-Mobile": "?1",
+  //     //    "Sec-Ch-Ua-Platform": "Android",
+  //     //    "Sec-Fetch-Dest": "",
+  //     //    "Sec-Fetch-Mode": "cors",
+  //     //    "Sec-Fetch-Site": "same-origin",
+  //     //    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  //     //  };
+  //     String response = await WebUtils.makePostRequest(KOUAISHOU_LIVE_API_URL_3, jsonEncode(requestMap), headers: headers);
+  //     Map<String, dynamic> jsonResponse = json.decode(response);
+  //     if (jsonResponse["error_msg"] == null) {
+  //       finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"] ??= "";
+  //       if (jsonResponse["liveStreamEndReason"] != null && jsonResponse["liveStreamEndReason"] == "The Live ended.") {
+  //         finalFlvUrl = "";
+  //         liveStatusMap["offline"] = true;
+  //       }
+  //       else {
+  //         liveStatusMap["online"] = true;
+  //       }
+  //     }
+  //     else {
+  //       liveStatusMap["apiError"] = true;
+  //       error = "Username : ${username}\nError Message : " + jsonResponse["error_msg"];
+  //     }
+  //   } catch (e) {
+  //     print(e);
+  //     finalFlvUrl = "";
+  //     liveStatusMap["exceptionError"] = true;
+  //   }
+  //   return (finalFlvUrl, error, liveStatusMap);
+  // }
 
-      /*if(orginalLink == null || orginalLink!.isEmpty)
-        {
-          WebViewUtils webViewUtils = WebViewUtils();
-          orginalLink = await webViewUtils.getUrlWithWebView(finalUrl!, "",isBackground: true);
-          await webViewUtils.disposeWebView();
-        }*/
-      if (orginalLink!.isEmpty) {
-        orginalLink = KOUAISHOU_MAIN_MOBILE_URL + username + "?cc=share_wxms&followRefer=151&shareMethod=CARD&kpn=GAME_ZONE&subBiz=LIVE_STEARM_OUTSIDE&shareToken=$shareToken&shareMode=APP&efid=0";
-      }
-      Uri orginalUri = Uri.parse(orginalLink!);
-      String? eid = orginalUri.path
-          .split("/")
-          .last;
-      String? efid = "0";
-      var requestMap = {"efid": efid, "eid": eid, "source": 6, "shareMethod": "card", "clientType": "WEB_OUTSIDE_SHARE_H5"};
-      var headers = {
-        "Referer": orginalLink,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-        "Content-Type": "application/json",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept": "*/*",
-        "Cookie": cookie
-      };
-      //  var headers = {"Accept": "*/*",
-      //    "Accept-Encoding": "gzip, deflate, br",
-      //    "Accept-Language": "en-US,en;q=0.9,ur;q=0.8",
-      //    "Access-Control-Allow-Credentials": "true",
-      //    "Content-Type": "application/json",
-      //    "Cookie": cookie,
-      //    "Host": "livev.m.chenzhongtech.com",
-      //    "Origin": "https://livev.m.chenzhongtech.com",
-      //    "Referer": orginalLink,
-      //    "Sec-Ch-Ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
-      //    "Sec-Ch-Ua-Mobile": "?1",
-      //    "Sec-Ch-Ua-Platform": "Android",
-      //    "Sec-Fetch-Dest": "",
-      //    "Sec-Fetch-Mode": "cors",
-      //    "Sec-Fetch-Site": "same-origin",
-      //    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-      //  };
-      String response = await WebUtils.makePostRequest(KOUAISHOU_LIVE_API_URL_3, jsonEncode(requestMap), headers: headers);
-      Map<String, dynamic> jsonResponse = json.decode(response);
-      if (jsonResponse["error_msg"] == null) {
-        finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"] ??= "";
-        if (jsonResponse["liveStreamEndReason"] != null && jsonResponse["liveStreamEndReason"] == "The Live ended.") {
-          finalFlvUrl = "";
-          liveStatusMap["offline"] = true;
-        }
-        else {
-          liveStatusMap["online"] = true;
-        }
-      }
-      else {
-        liveStatusMap["apiError"] = true;
-        error = "Username : ${username}\nError Message : " + jsonResponse["error_msg"];
-      }
-    } catch (e) {
-      print(e);
-      finalFlvUrl = "";
-      liveStatusMap["exceptionError"] = true;
-    }
-    return (finalFlvUrl, error, liveStatusMap);
-  }
 
+  // Future<String?> updateShareToken(List<UserKuaishou> list) async
+  // {
+  //   String? shareToken;
+  //   List<UserKuaishou> shuffleList = List.from(list);
+  //   shuffleList.shuffle();
+  //   for (UserKuaishou userKuaishou in shuffleList) {
+  //     try {
+  //       String finalUrl = "https://live.kuaishou.com/u/${userKuaishou.value}";
+  //       String? orginalLink = await WebUtils.getOriginalUrl(
+  //           finalUrl, headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 14; 23129RAA4G Build/UKQ1.231207.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.107 Mobile Safari/537.36"}, timeout: Duration(seconds: 15));
+  //       Uri orginalUri = Uri.parse(orginalLink!);
+  //       shareToken = orginalUri.queryParameters["shareToken"];
+  //       if (shareToken != null) {
+  //         break;
+  //       }
+  //     } catch (e) {
+  //       print(e);
+  //     }
+  //   }
+  //   return shareToken!;
+  // }
 
-  Future<String?> updateShareToken(List<UserKuaishou> list) async
-  {
-    String? shareToken;
-    List<UserKuaishou> shuffleList = List.from(list);
-    shuffleList.shuffle();
-    for (UserKuaishou userKuaishou in shuffleList) {
-      try {
-        String finalUrl = "https://live.kuaishou.com/u/${userKuaishou.value}";
-        String? orginalLink = await WebUtils.getOriginalUrl(
-            finalUrl, headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 14; 23129RAA4G Build/UKQ1.231207.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.107 Mobile Safari/537.36"}, timeout: Duration(seconds: 15));
-        Uri orginalUri = Uri.parse(orginalLink!);
-        shareToken = orginalUri.queryParameters["shareToken"];
-        if (shareToken != null) {
-          break;
-        }
-      } catch (e) {
-        print(e);
-      }
-    }
-    return shareToken!;
-  }
-
-  String updateCookie(String currentCookie) {
-    List<String> list = [
-      "did=web_5db7f4c0d9664902af774fd08ebdf769; didv=1730628699000",
-      "did=web_abb8d5daa36a428fbfe7ebdb68830bca; didv=1732683243000",
-      "did=web_907321761e6e4eff96111b476bc9cad4; didv=1732694096000",
-      "did=web_618d6ac474dd404a998cf2b641d96843; didv=1732694664000",
-      "did=web_09abdedb117249279127a0cb9f829e81; didv=1732709899000",
-      "did=web_2efca5ecf2984f99ad1aab086be65367; didv=1732710789000"
-      "did=web_81ebb9322ec74073ac601fdb934cb676; didv=1732710974000"
-    ];
-    if (currentCookie.isEmpty) {
-      int index = getIntBetweenRange(0, 4);
-      String selectedCookie = list[index];
-      return selectedCookie;
-    }
-    else {
-      String selectedCookie;
-      do {
-        int index = getIntBetweenRange(0, 4);
-        selectedCookie = list[index];
-      } while (selectedCookie == currentCookie);
-      return selectedCookie;
-    }
-  }
+  // String updateCookie(String currentCookie) {
+  //   List<String> list = [
+  //     "did=web_5db7f4c0d9664902af774fd08ebdf769; didv=1730628699000",
+  //     "did=web_abb8d5daa36a428fbfe7ebdb68830bca; didv=1732683243000",
+  //     "did=web_907321761e6e4eff96111b476bc9cad4; didv=1732694096000",
+  //     "did=web_618d6ac474dd404a998cf2b641d96843; didv=1732694664000",
+  //     "did=web_09abdedb117249279127a0cb9f829e81; didv=1732709899000",
+  //     "did=web_2efca5ecf2984f99ad1aab086be65367; didv=1732710789000"
+  //     "did=web_81ebb9322ec74073ac601fdb934cb676; didv=1732710974000"
+  //   ];
+  //   if (currentCookie.isEmpty) {
+  //     int index = getIntBetweenRange(0, 4);
+  //     String selectedCookie = list[index];
+  //     return selectedCookie;
+  //   }
+  //   else {
+  //     String selectedCookie;
+  //     do {
+  //       int index = getIntBetweenRange(0, 4);
+  //       selectedCookie = list[index];
+  //     } while (selectedCookie == currentCookie);
+  //     return selectedCookie;
+  //   }
+  // }
 
   Future<String> getUsernameFromKuaishouUrl(String kuaishouLink) async
   {
@@ -768,84 +768,84 @@ class   AppController extends GetxController {
   }
 
 
-  Future<String> getStreamUrlForBackgroundUpload_Web(String userName) async
-  {
-    String streamUrl = "";
-    String cookie = "clientid=3; did=web_dfa8864005520444a895fd1cb3c51538; client_key=65890b29; kpn=GAME_ZONE; _did=web_870397124DBD985F; didv=1730628663000; did=web_85aeaebcb9d6490bb484e761a201dd7c; Hm_lvt_86a27b7db2c5c0ae37fee4a8a35033ee=1730628678; kuaishou.live.bfb1s=7206d814e5c089a58c910ed8bf52ace5";
-    String finalUrl = "https://live.kuaishou.com/u/$userName";
-    try {
-      var headers = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br, zstd",
-        "Accept-Language": "en-US,en;q=0.9,ur;q=0.8",
-        "cache-control": "max-age=0",
-        "connection": "keep-alive",
-        "Cookie": cookie,
-        "Host": "live.kuaishou.com",
-        "Sec-Ch-Ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": "Windows",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "upgrade-insecure-requests": "1",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-      };
-      String? response = await WebUtils.makeGetRequest(finalUrl, headers: headers, timeout: Duration(seconds: 25));
-      dom.Document document = WebUtils.getDomfromHtml(response!);
-      String jsonRaw = document
-          .querySelectorAll("script")
-          .where((value) => value.text.contains("window.__INITIAL_STATE__"))
-          .first
-          .text;
-      String jsonResponse = getStringBetweenTwoStrings("window.__INITIAL_STATE__ = {", "};", jsonRaw!).replaceAll(":,", ":\"\",").replaceAll("undefined", "\"\"").replaceAll("\"\"\"", "\"");
-      Map<String, dynamic> jsonEncode = json.decode("{\"" + jsonResponse + "}");
+  // Future<String> getStreamUrlForBackgroundUpload_Web(String userName) async
+  // {
+  //   String streamUrl = "";
+  //   String cookie = "clientid=3; did=web_dfa8864005520444a895fd1cb3c51538; client_key=65890b29; kpn=GAME_ZONE; _did=web_870397124DBD985F; didv=1730628663000; did=web_85aeaebcb9d6490bb484e761a201dd7c; Hm_lvt_86a27b7db2c5c0ae37fee4a8a35033ee=1730628678; kuaishou.live.bfb1s=7206d814e5c089a58c910ed8bf52ace5";
+  //   String finalUrl = "https://live.kuaishou.com/u/$userName";
+  //   try {
+  //     var headers = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+  //       "Accept-Encoding": "gzip, deflate, br, zstd",
+  //       "Accept-Language": "en-US,en;q=0.9,ur;q=0.8",
+  //       "cache-control": "max-age=0",
+  //       "connection": "keep-alive",
+  //       "Cookie": cookie,
+  //       "Host": "live.kuaishou.com",
+  //       "Sec-Ch-Ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+  //       "Sec-Ch-Ua-Mobile": "?0",
+  //       "Sec-Ch-Ua-Platform": "Windows",
+  //       "Sec-Fetch-Dest": "document",
+  //       "Sec-Fetch-Mode": "navigate",
+  //       "Sec-Fetch-Site": "none",
+  //       "Sec-Fetch-User": "?1",
+  //       "upgrade-insecure-requests": "1",
+  //       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  //     };
+  //     String? response = await WebUtils.makeGetRequest(finalUrl, headers: headers, timeout: Duration(seconds: 25));
+  //     dom.Document document = WebUtils.getDomfromHtml(response!);
+  //     String jsonRaw = document
+  //         .querySelectorAll("script")
+  //         .where((value) => value.text.contains("window.__INITIAL_STATE__"))
+  //         .first
+  //         .text;
+  //     String jsonResponse = getStringBetweenTwoStrings("window.__INITIAL_STATE__ = {", "};", jsonRaw!).replaceAll(":,", ":\"\",").replaceAll("undefined", "\"\"").replaceAll("\"\"\"", "\"");
+  //     Map<String, dynamic> jsonEncode = json.decode("{\"" + jsonResponse + "}");
+  //
+  //     if ((jsonEncode["liveroom"]["playList"][0]["liveStream"] as Map).isNotEmpty && (jsonEncode["liveroom"]["playList"][0]["liveStream"]["playUrls"] as List).isNotEmpty) {
+  //       streamUrl = jsonEncode["liveroom"]["playList"][0]["liveStream"]["playUrls"][0]["adaptationSet"]["representation"][0]["url"];
+  //     }
+  //     print("streamUrl : " + streamUrl);
+  //   } catch (e) {
+  //     streamUrl = "";
+  //     print(e);
+  //   }
+  //   return streamUrl;
+  // }
 
-      if ((jsonEncode["liveroom"]["playList"][0]["liveStream"] as Map).isNotEmpty && (jsonEncode["liveroom"]["playList"][0]["liveStream"]["playUrls"] as List).isNotEmpty) {
-        streamUrl = jsonEncode["liveroom"]["playList"][0]["liveStream"]["playUrls"][0]["adaptationSet"]["representation"][0]["url"];
-      }
-      print("streamUrl : " + streamUrl);
-    } catch (e) {
-      streamUrl = "";
-      print(e);
-    }
-    return streamUrl;
-  }
+  // Future<String> getStreamUrlForBackgroundUpload_Web2(String url) async
+  // {
+  //   String streamUrl = "";
+  //   var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
+  //   try{
+  //   String? orginalUrl = await WebUtils.getOriginalUrl(url,headers: header);
+  //   String? response = await WebUtils.makeGetRequest(orginalUrl!,headers: header);
+  //     dom.Document document = WebUtils.getDomfromHtml(response!);
+  //     String jsonRaw = document
+  //         .querySelectorAll("script")
+  //         .where((value) => value.text.contains("window.__INITIAL_STATE__"))
+  //         .first
+  //         .text;
+  //     String jsonResponse = getStringBetweenTwoStrings("window.__INITIAL_STATE__ = {", "};", jsonRaw!).replaceAll(":,", ":\"\",").replaceAll("undefined", "\"\"").replaceAll("\"\"\"", "\"");
+  //     Map<String, dynamic> jsonEncode = json.decode("{\"" + jsonResponse + "}");
+  //
+  //     if ((jsonEncode["liveroom"]["playList"][0]["liveStream"] as Map).isNotEmpty) {
+  //       streamUrl = jsonEncode["liveroom"]["playList"][0]["liveStream"]["playUrls"]["h264"]["adaptationSet"]["representation"][0]["url"];
+  //     }
+  //     print("streamUrl : " + streamUrl);
+  //   } catch (e) {
+  //     streamUrl = "";
+  //     print(e);
+  //   }
+  //   return streamUrl;
+  // }
 
-  Future<String> getStreamUrlForBackgroundUpload_Web2(String url) async
-  {
-    String streamUrl = "";
-    var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
-    try{
-    String? orginalUrl = await WebUtils.getOriginalUrl(url,headers: header);
-    String? response = await WebUtils.makeGetRequest(orginalUrl!,headers: header);
-      dom.Document document = WebUtils.getDomfromHtml(response!);
-      String jsonRaw = document
-          .querySelectorAll("script")
-          .where((value) => value.text.contains("window.__INITIAL_STATE__"))
-          .first
-          .text;
-      String jsonResponse = getStringBetweenTwoStrings("window.__INITIAL_STATE__ = {", "};", jsonRaw!).replaceAll(":,", ":\"\",").replaceAll("undefined", "\"\"").replaceAll("\"\"\"", "\"");
-      Map<String, dynamic> jsonEncode = json.decode("{\"" + jsonResponse + "}");
-
-      if ((jsonEncode["liveroom"]["playList"][0]["liveStream"] as Map).isNotEmpty) {
-        streamUrl = jsonEncode["liveroom"]["playList"][0]["liveStream"]["playUrls"]["h264"]["adaptationSet"]["representation"][0]["url"];
-      }
-      print("streamUrl : " + streamUrl);
-    } catch (e) {
-      streamUrl = "";
-      print(e);
-    }
-    return streamUrl;
-  }
-
-  Future<String> getStreamUrlForBackgroundUpload_Mobile(String userName) async
-  {
-    String finalUrl = "https://live.kuaishou.com/u/$userName";
-    String? oLink = await WebUtils.getOriginalUrl(finalUrl, headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.114 Mobile Safari/537.36"});
-    String? response = await WebUtils.makeGetRequest(oLink!, headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.114 Mobile Safari/537.36"});
-    return "";
-  }
+  // Future<String> getStreamUrlForBackgroundUpload_Mobile(String userName) async
+  // {
+  //   String finalUrl = "https://live.kuaishou.com/u/$userName";
+  //   String? oLink = await WebUtils.getOriginalUrl(finalUrl, headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.114 Mobile Safari/537.36"});
+  //   String? response = await WebUtils.makeGetRequest(oLink!, headers: {"User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.114 Mobile Safari/537.36"});
+  //   return "";
+  // }
 
   Future startUploading(String links) async
   {

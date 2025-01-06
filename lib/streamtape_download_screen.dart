@@ -109,7 +109,10 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                   ),
                   IconButton(
                     onPressed: () async {
-                      await appController.deleteDuplicateFiles(appController.selectedDownloadFolder.value.id!);
+                      appController.showDeleteDialog(() async {
+                        await appController.deleteDuplicateFiles(appController.selectedDownloadFolder.value.id!);
+                      },title: "Clean Streamtape Folder",msg: "Are you sure you want to clean folder?");
+
                     },
                     icon: Icon(Icons.cleaning_services),
                   )
