@@ -57,6 +57,7 @@ class   AppController extends GetxController {
   String STREAMTAPE_NEW_FOLDER_API_URL = "https://streamtape.com/api/website/filemanager/folder/put";
   String STREAMTAPE_DELETE_REMOTE_DOWNLOAD_API_URL = "https://streamtape.com/api/website/remotedl/del";
   String STREAMTAPE_DELETE_FOLDER_API_URL = "https://streamtape.com/api/website/filemanager/folder/del";
+  String STREAMTAPE_DELETE_FILE_API_URL = "https://streamtape.com/api/website/filemanager/file/del";
   String STREAMTAPE_RENAME_API_URL = "https://streamtape.com/api/website/filemanager/folder/rename";
   String KOUAISHOU_LIVE_API_URL = "https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
   String KOUAISHOU_LIVE_API_URL_2 = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
@@ -352,6 +353,19 @@ class   AppController extends GetxController {
   {
     var bodyMap = {"id": id, "_csrf": crfToken,};
     String? respose = await WebUtils.makePostRequest(STREAMTAPE_DELETE_FOLDER_API_URL, bodyMap, headers: {"Cookie": currentCookie});
+    Map<String, dynamic> jsonMap = jsonDecode(respose);
+    if (jsonMap["statusCode"] == 200) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  Future<bool> deleteFiles(String ids) async
+  {
+    var bodyMap = {"id": ids, "_csrf": crfToken,};
+    String? respose = await WebUtils.makePostRequest(STREAMTAPE_DELETE_FILE_API_URL, bodyMap, headers: {"Cookie": currentCookie});
     Map<String, dynamic> jsonMap = jsonDecode(respose);
     if (jsonMap["statusCode"] == 200) {
       return true;
@@ -1232,7 +1246,7 @@ class   AppController extends GetxController {
       String? javaScript = list[9].text;
       String? tokenString = getStringBetweenTwoStrings("<script>document.getElementById('ideoolink').innerHTML =", "')", javaScript);
       String? token = getStringAfterStartStringToEnd("&token=", tokenString);
-      String dlUrl = "https:/" + ideooLink + "&token=" + token + "&dl=1s";
+      String dlUrl = "https:/" + ideooLink + "&token=" + token + "&dl=1";
       //String dlUrl = "https:/" + ideooLink + "&dl=1s";
       return (dlUrl, imageUrl);
     } catch (e) {
@@ -1262,7 +1276,6 @@ class   AppController extends GetxController {
     downloadLinksList = [];
     StringBuffer stringBuffer = StringBuffer("");
     StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
-    streamTapeFolder.files!.sort((a, b) => a.name!.toLowerCase().compareTo(b.name!.toLowerCase()));
     for (StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!) {
       downloadLinksList.add(DownloadItem(streamtapeFileItem.name, "Press Download icon to get link....", "", streamtapeFileItem.link!, false.obs, false.obs,Uint8List.fromList([]),false));
       //stringBuffer.write(mp4ImageUrl.$1! +"\n\n");
@@ -1286,6 +1299,18 @@ class   AppController extends GetxController {
       downloadItem!.downloadUrl =  "Unable to get download url....";
       downloadItem!.imageUrl = "";
     }
+
+    if(downloadItem.imageUrl!.isEmpty && downloadItem.downloadUrl != "Unable to get download url....")
+      {
+        try {
+          downloadItem.imageBytes = await VideoCaptureUtils().captureImage(downloadItem.downloadUrl!, 1000);
+          if (downloadItem.imageBytes != null && downloadItem.imageBytes!.isNotEmpty) {
+            downloadItem.isUrlImage = true;
+          }
+        } catch (e) {
+          print(e);
+        }
+      }
     //}
 
     downloadItem!.isLoading!.value = false;
@@ -1873,6 +1898,106 @@ class   AppController extends GetxController {
     double start = double.parse(valueList[0]);
     double end = double.parse(valueList[1]);
     return RangeValues(start, end);
+  }
+
+  deleteDuplicateFiles(String id) async
+  {
+    DialogUtils.showLoaderDialog(Get.context!,text: "Deleting duplicated files......");
+    try {
+      StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
+
+      List<String> duplicateFiles = getDuplicateFilesName(streamTapeFolder.files!);
+      List<String> toDeleteFileList = [];
+      for(String duplicateFile in duplicateFiles)
+            {
+              List<StreamtapeFileItem> duplicateStreamtapeFiles = streamTapeFolder.files!.where((item)=> item.name == duplicateFile).toList();
+              StreamtapeFileItem largestStreamtapeFile = duplicateStreamtapeFiles.reduce((current, next) {
+                return current.size! > next.size! ? current : next;
+              });
+              for(StreamtapeFileItem streamtapeFileItem in duplicateStreamtapeFiles)
+                {
+                  if(largestStreamtapeFile.linkid != streamtapeFileItem.linkid)
+                    {
+                      toDeleteFileList.add(streamtapeFileItem.linkid!);
+                    }
+                }
+            }
+
+      for(StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!)
+          {
+            if(convertBytesToMegaBytes(streamtapeFileItem.size!) < 200 || streamtapeFileItem.convert == "error")
+            {
+              if(!toDeleteFileList.contains(streamtapeFileItem.linkid!))
+                {
+                  toDeleteFileList.add(streamtapeFileItem.linkid!);
+                }
+            }
+          }
+      if (toDeleteFileList.length > 0) {
+            String ids = convertListToArrayString(toDeleteFileList);
+            await deleteFiles(ids);
+          }
+
+      if(toDeleteFileList.length == 0)
+            {
+              showToast("There is not need to clean it......");
+            }
+          else
+            {
+              showToast("Deleted Successfully.....");
+            }
+    } catch (e) {
+      print(e);
+    }
+
+    DialogUtils.stopLoaderDialog();
+
+  }
+
+  String convertListToArrayString (List<String> list)
+  {
+    StringBuffer arrayBuffer = StringBuffer("");
+    arrayBuffer.write("[");
+    for(int i = 0;i < list.length;i++)
+      {
+        arrayBuffer.write("\"${list[i]}\"");
+        if(i != list.length - 1)
+          {
+            arrayBuffer.write(",");
+          }
+      }
+    arrayBuffer.write("]");
+    return arrayBuffer.toString();
+  }
+
+  List<String> getDuplicateFilesName(List<StreamtapeFileItem> list)
+  {
+    Map<String, int> countMap = {};
+
+    // Iterate through the list and populate the countMap
+    for (StreamtapeFileItem streamtapeFileItem in list) {
+      if (countMap.containsKey(streamtapeFileItem.name!)) {
+        countMap[streamtapeFileItem.name!] = countMap[streamtapeFileItem.name]! + 1;
+      } else {
+        countMap[streamtapeFileItem.name!] = 1;
+      }
+    }
+
+    // Collect all duplicates
+    List<String> duplicates = [];
+    countMap.forEach((key, value) {
+      if (value > 1) {
+        duplicates.add(key);
+      }
+    });
+    return duplicates;
+  }
+
+  double convertBytesToMegaBytes (int bytes)
+  {
+    double kb = bytes / 1024;
+    double mb = kb / 1024;
+    return mb;
   }
 
 }

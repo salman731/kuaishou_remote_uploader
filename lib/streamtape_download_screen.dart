@@ -106,6 +106,12 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                       await appController.getDownloadLinks(appController.selectedDownloadFolder.value.id!);
                     },
                     icon: Icon(Icons.download),
+                  ),
+                  IconButton(
+                    onPressed: () async {
+                      await appController.deleteDuplicateFiles(appController.selectedDownloadFolder.value.id!);
+                    },
+                    icon: Icon(Icons.cleaning_services),
                   )
                 ],
               ),
@@ -261,7 +267,7 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                                                 {
                                                   try {
                                                     appController.currentDownloadList[index]!.isLoading!.value = true;
-                                                    appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 500);
+                                                    appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 1000);
                                                   } catch (e) {
                                                     print(e);
                                                   }
@@ -293,10 +299,10 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                                         width: 28,
                                         child: IconButton(onPressed: () async {
                                           appController.currentDownloadList[index]!.isUrlImage = !appController.currentDownloadList[index]!.isUrlImage!;
-                                          if(appController.currentDownloadList[index]!.isUrlImage! && (appController.currentDownloadList[index]!.imageBytes! == null  || appController.currentDownloadList[index]!.imageBytes!.isEmpty)){
+                                          if(appController.currentDownloadList[index]!.isUrlImage! && (appController.currentDownloadList[index]!.imageBytes == null  || appController.currentDownloadList[index]!.imageBytes!.isEmpty)){
                                             try {
                                               appController.currentDownloadList[index]!.isLoading!.value = true;
-                                              appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 500);
+                                              appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 1000);
                                             } catch (e) {
                                               print(e);
                                             }
