@@ -186,13 +186,19 @@ Timer unfollowLaunchTimer(Duration duration,{ required Function callback})
 
 int getUnfollowMin(List<UserKuaishou> userList)
 {
-  int userListSize = userList.length;
-  int intervalMin = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 5);
-  int randomMin = getIntBetweenRange(intervalMin, intervalMin + 3);
-  RangeValues rangeValues = AppController.getRangeValuesFromString(SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL,defaultValue: "15:25"));
-  int totalminPerUser = ((userListSize * getIntBetweenRange(rangeValues.start.toInt(),rangeValues.end.toInt())) / 60).ceil() ;
-  int totalMin = totalminPerUser + randomMin;
-  return totalMin;
+  if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_CONCURRENT_UNFOLLOW_USER_UPLOADING,defaultValue: true)) {
+    int userListSize = userList.length;
+    int intervalMin = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 5);
+    int randomMin = getIntBetweenRange(intervalMin, intervalMin + 3);
+    RangeValues rangeValues = AppController.getRangeValuesFromString(SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL,defaultValue: "15:25"));
+    int totalminPerUser = ((userListSize * getIntBetweenRange(rangeValues.start.toInt(),rangeValues.end.toInt())) / 60).ceil();
+    int totalMin = totalminPerUser + randomMin;
+    return totalMin;
+  }
+  else
+    {
+      return SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER,defaultValue: 5);
+    }
 }
 
 Future<void> showNotification({required String title,required String content}) async
@@ -629,6 +635,19 @@ class _MyHomePageState extends State<MyHomePage> {
                       SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, appController.isWebPageProcessing.value);
                     },
                     title: Text("Enable Web Page Processing"),
+                  ),
+
+                  ),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isConcurrentUnfollowUploadingEnable.value,
+                    onChanged: (value){
+                      appController.isConcurrentUnfollowUploadingEnable.value = !appController.isConcurrentUnfollowUploadingEnable.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_ENABLE_CONCURRENT_UNFOLLOW_USER_UPLOADING, appController.isConcurrentUnfollowUploadingEnable.value);
+                    },
+                    title: Text("Enable Concurrent Background Unfollow Uploading"),
                   ),
 
                   ),

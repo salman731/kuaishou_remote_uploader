@@ -98,6 +98,7 @@ class   AppController extends GetxController {
   RxBool isConcurrentProcessing = true.obs;
   RxBool isWebPageProcessing = true.obs;
   RxBool isBackgroundModeEnable = false.obs;
+  RxBool isConcurrentUnfollowUploadingEnable = true.obs;
   RxString downloadLinks = "".obs;
   List<DownloadItem> downloadLinksList = [];
   List<DownloadItem> filterdownloadLinksList = [];
@@ -154,6 +155,7 @@ class   AppController extends GetxController {
     isConcurrentProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CONCURRENT_PROCESS, defaultValue: true);
     isWebPageProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, defaultValue: true);
     isBackgroundModeEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_BACKGROUNDMODE_ENABLE, defaultValue: false);
+    isConcurrentUnfollowUploadingEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_CONCURRENT_UNFOLLOW_USER_UPLOADING, defaultValue: true);
     processBackgroundMode();
     midNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, defaultValue: 15); // 12:00 AM -> 06:00 AM
     morningAfterNoonSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, defaultValue: 10); // 6:00 AM -> 4:00 PM
@@ -1196,30 +1198,34 @@ class   AppController extends GetxController {
 
   Future<StreamtapeDownloadStatus> getDownloadingDetailItem(dynamic item, int seekPosition) async {
     Uint8List? bytes;
-    Uint8List? bytesBox = getDownloadingLinkId(item["id"]);
-    if (item["status"] != "error") {
-      if (bytesBox == null || bytesBox.isEmpty) {
-        final directory = await getTemporaryDirectory();
-        final String outputPath = '${directory.path}/${Random().nextInt(10000000)}.jpg';
+    try {
+      Uint8List? bytesBox = getDownloadingLinkId(item["id"]);
+      if (item["status"] != "error") {
+            if (bytesBox == null || bytesBox.isEmpty) {
+              final directory = await getTemporaryDirectory();
+              final String outputPath = '${directory.path}/${Random().nextInt(10000000)}.jpg';
 
-        String command = '-i ${item["url"]} -ss ${seekPosition / 1000} -vframes 1 $outputPath';
+              String command = '-i ${item["url"]} -ss ${seekPosition / 1000} -vframes 1 $outputPath';
 
-        FFmpegSession session = await FFmpegKit.execute(command);
-        final returnCode = await session.getReturnCode();
+              FFmpegSession session = await FFmpegKit.execute(command);
+              final returnCode = await session.getReturnCode();
 
 
-        if (ReturnCode.isSuccess(returnCode)) {
-          File outputFile = File(outputPath);
-          bytes = await outputFile.readAsBytes();
-          setDownloadingLinkId(item["id"], bytes);
-          if (await outputFile.exists()) {
-            await outputFile.delete();
+              if (ReturnCode.isSuccess(returnCode)) {
+                File outputFile = File(outputPath);
+                bytes = await outputFile.readAsBytes();
+                setDownloadingLinkId(item["id"], bytes);
+                if (await outputFile.exists()) {
+                  await outputFile.delete();
+                }
+              }
+            }
+            else {
+              bytes = getDownloadingLinkId(item["id"]);
+            }
           }
-        }
-      }
-      else {
-        bytes = getDownloadingLinkId(item["id"]);
-      }
+    } catch (e) {
+      print(e);
     }
     bool isUnfollowUser = isUrlExistInUnfollowUserListBox(item["url"]);
     return StreamtapeDownloadStatus(status: item["status"],
@@ -1632,7 +1638,7 @@ class   AppController extends GetxController {
     }
   }
 
-  Future initiateUnfollowUploadingProcess () async
+  Future initiateUnfollowUploadingProcessSequence () async
   {
     if(unfollowUserTimer != null)
       {
@@ -1728,6 +1734,121 @@ class   AppController extends GetxController {
             await Future.delayed(Duration(seconds: getIntBetweenRange(rangeValues.start.toInt(), rangeValues.end.toInt())));
 
         }
+        isUnfollowUserProcessing.value = false;
+      });
+    }
+  }
+  Future initiateUnfollowUploadingProcess () async
+  {
+    if(isConcurrentUnfollowUploadingEnable.value)
+      {
+        await initiateUnfollowUploadingProcessConcurrent();
+      }
+    else
+      {
+        await initiateUnfollowUploadingProcessSequence();
+      }
+  }
+  Future initiateUnfollowUploadingProcessConcurrent () async
+  {
+    if(unfollowUserTimer != null)
+    {
+      unfollowUserTimer!.cancel();
+      unfollowUserTimer == null;
+    }
+    for(StopWatchTimer stopwatch in unfollowUserStopwatch)
+    {
+      stopwatch.onStopTimer();
+    }
+    unfollowUserStopwatch = [];
+    List<UserKuaishou> list = getAllUserList();
+    List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+    await setFolderIfNotSet();
+    if (listFiltered.length > 0) {
+      int totalMin = getUnfollowMin(listFiltered);
+      SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,totalMin);
+      unfollowCurrentTime.value = totalMin;
+      unfollowUserTimer = makePeriodicTimer(Duration(minutes: totalMin),fireNow: true,isCustomTimer: true,isUnfollowTimer: true,(timer) async {
+
+        listFiltered = getAllUserList().where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+        final stopWatchTimer = StopWatchTimer(
+            mode: StopWatchMode.countDown,
+            presetMillisecond: StopWatchTimer.getMilliSecFromMinute(SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,)), // millisecond => minute.
+            onChangeRawSecond: (value) async {
+              unfollowUploadRemainingTime.value = "Next in : ${formatTime(value)}";
+            }
+        );
+        stopWatchTimer.onStartTimer();
+
+        unfollowUserStopwatch.add(stopWatchTimer);
+        isUnfollowUserProcessing.value = true;
+        List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await getRemoteDownloadingStatus_background();
+        unfollowUserUploaded.value = 0;
+        unfollowUserOnline.value = 0;
+        unfollowUserError.value = 0;
+        unfollowUserErrorCaptcha.value = 0;
+        unfollowUserFrequentRequests.value = 0;
+        unfollowUserOthers.value = 0;
+        unfollowUserOffline.value = 0;
+        totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
+
+
+          try {
+            List<Future<(String,ApiErrorEnum)>> futureFlvUrlList = [];
+            String cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
+            bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
+            if (cookie.isNotEmpty && !isCaptchaRequired) {
+              for (UserKuaishou userKuaishou in listFiltered) {
+                String initialUrl = "https://v.kuaishou.com${userKuaishou.value!.replaceAll("<||>UNFOLLOW", "")}";
+                futureFlvUrlList.add(getDirectKuaishouFlvUrlOrginal(initialUrl,cookie));
+              }
+              List<(String,ApiErrorEnum)> futureFlvUrlListResult = await Future.wait(futureFlvUrlList);
+
+              for(int i = 0;i<futureFlvUrlListResult.length;i++)
+                {
+                  (String,ApiErrorEnum) result = futureFlvUrlListResult[i];
+                  if (result.$2 == ApiErrorEnum.NONE) {
+                    if (result.$1.isNotEmpty) {
+                      unfollowUserOnline.value  = unfollowUserOnline.value + 1;
+                      bool isUploaded = await startUploading_background(result.$1, streamTapeDownloadStatusList,isUnfollow: true);
+                      if(isUploaded)
+                      {
+                        unfollowUserUploaded.value = unfollowUserUploaded.value + 1;
+                        await Future.delayed(Duration(seconds: 2));
+                      }
+                    }
+                  }
+                  else
+                  {
+                    if(result.$2 == ApiErrorEnum.CAPTCHA_REQUIRED)
+                    {
+                      unfollowUserErrorCaptcha.value = unfollowUserErrorCaptcha.value + 1;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, true);
+                    }
+                    else if(result.$2 == ApiErrorEnum.EXCEPTION)
+                    {
+                      unfollowUserError.value = unfollowUserError.value + 1;
+                    }
+                    else if(result.$2 == ApiErrorEnum.FREQUENT_REQUESTS)
+                    {
+                      unfollowUserFrequentRequests.value = unfollowUserFrequentRequests.value + 1;
+                    }
+                    else if(result.$2 == ApiErrorEnum.OTHERS)
+                    {
+                      unfollowUserOthers.value = unfollowUserOthers.value + 1;
+                    }
+                    else if(result.$2 == ApiErrorEnum.OFFLINE)
+                    {
+                      unfollowUserOffline.value = unfollowUserOffline.value + 1;
+                    }
+                  }
+                   totalUnfollowUserUploadedProgress.value = "${i+1}/${futureFlvUrlListResult.length}";
+                }
+
+            }
+          } catch (e) {
+            print(e);
+          }
         isUnfollowUserProcessing.value = false;
       });
     }
@@ -1999,5 +2120,41 @@ class   AppController extends GetxController {
     double mb = kb / 1024;
     return mb;
   }
+
+
+  // List<StreamtapeFileItem> singleGroupStreamTapeFiles = [];
+  // var groupedByTimeStamp = <int, List<StreamtapeFileItem>>{};
+  //
+  // for (var streamtapeFileItem in duplicateStreamtapeFiles) {
+  //   groupedByTimeStamp.putIfAbsent(streamtapeFileItem.created_at!, () => []).add(streamtapeFileItem);
+  // }
+  //
+  // var result = groupedByTimeStamp.values.toList();
+  //
+  // for (List<StreamtapeFileItem> group in result) {
+  //   if (group.length > 1) {
+  //     StreamtapeFileItem largestFilteredStreamtapeFile = group.reduce((current, next) {
+  //       return current.size! > next.size! ? current : next;
+  //     });
+  //     for(StreamtapeFileItem streamtapeFileItem in group)
+  //     {
+  //       if(largestFilteredStreamtapeFile.linkid != streamtapeFileItem.linkid!)
+  //       {
+  //         toDeleteFileList.add(streamtapeFileItem.linkid!);
+  //       }
+  //     }
+  //   }
+  //   else
+  //   {
+  //     singleGroupStreamTapeFiles.addAll(group);
+  //   }
+  // }
+  // for(StreamtapeFileItem streamtapeFileItem in singleGroupStreamTapeFiles)
+  // {
+  // if(largestStreamtapeFile.linkid != streamtapeFileItem.linkid)
+  // {
+  // toDeleteFileList.add(streamtapeFileItem.linkid!);
+  // }
+  // }
 
 }

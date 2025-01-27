@@ -18,11 +18,13 @@ class StreamtapeDownloadScreen extends StatefulWidget {
 
 class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
   AppController appController = Get.find<AppController>();
+  RxString downloadingFolder = "".obs;
 
 
   @override
   void initState() {
     appController.selectedDownloadFolder.value = appController.streamTapeFolder!.folders!.first;
+    downloadingFolder.value = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_DOWNLOADING_FOLDER);
   }
 
   @override
@@ -115,6 +117,13 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
 
                     },
                     icon: Icon(Icons.cleaning_services),
+                  ),
+                  IconButton(
+                    onPressed: () async {
+                      SharedPrefsUtil.setString(SharedPrefsUtil.KEY_DOWNLOADING_FOLDER, appController.selectedDownloadFolder.value.name!);
+                      downloadingFolder.value = appController.selectedDownloadFolder.value.name!;
+                    },
+                    icon: Icon(Icons.bookmark),
                   )
                 ],
               ),
@@ -163,6 +172,9 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                   },
                 ),
               ),
+              SizedBox(height: 5,),
+              Obx(()=>Text("Current Downloading Folder : ${downloadingFolder.value}" ),),
+              SizedBox(height: 5,),
               GetBuilder<AppController>(
                 id: "updateStreamtapeDownloadingList",
                 builder: (_)
