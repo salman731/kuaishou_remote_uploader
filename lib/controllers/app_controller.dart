@@ -59,6 +59,7 @@ class   AppController extends GetxController {
   String STREAMTAPE_DELETE_FOLDER_API_URL = "https://streamtape.com/api/website/filemanager/folder/del";
   String STREAMTAPE_DELETE_FILE_API_URL = "https://streamtape.com/api/website/filemanager/file/del";
   String STREAMTAPE_RENAME_API_URL = "https://streamtape.com/api/website/filemanager/folder/rename";
+  String STREAMTAPE_COPY_API_URL = "https://streamtape.com/api/website/filemanager/file/copy";
   String KOUAISHOU_LIVE_API_URL = "https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
   String KOUAISHOU_LIVE_API_URL_2 = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=OUTSIDE_ANDROID_H5&captchaToken=";
   String KOUAISHOU_LIVE_API_URL_3 = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=UNKNOWN_PLATFORM&captchaToken=";
@@ -132,6 +133,7 @@ class   AppController extends GetxController {
   RxInt unfollowUserFrequentRequests = 0.obs;
   RxInt unfollowUserOthers = 0.obs;
   RxInt unfollowUserOffline = 0.obs;
+  RxInt unfollowLiveStreamOver = 0.obs;
   RxBool isToUpdateFolder = false.obs;
 
   /* initTimer()
@@ -390,7 +392,24 @@ class   AppController extends GetxController {
       return (true,jsonMap["id"].toString());
     }
     else {
-      return  (true,jsonMap["id"].toString());
+      return  (false,jsonMap["statusCode"].toString());
+    }
+  }
+
+  Future<bool> copyStreamTapeFiles(String ids, String toFolderId) async
+  {
+    try {
+      var bodyMap = {"id": ids, "_csrf": crfToken,"to":toFolderId};
+      String? respose = await WebUtils.makePostRequest(STREAMTAPE_COPY_API_URL, bodyMap, headers: {"Cookie": currentCookie});
+      Map<String, dynamic> jsonMap = jsonDecode(respose);
+      if (jsonMap["statusCode"] == 200) {
+            return true;
+          }
+          else {
+            return false;
+          }
+    } catch (e) {
+      return false;
     }
   }
 
@@ -618,6 +637,10 @@ class   AppController extends GetxController {
           if(jsonResponse["result"] == 2001 && jsonResponse["captchaConfig"] != null)
             {
               error = ApiErrorEnum.CAPTCHA_REQUIRED;
+            }
+          else if (jsonResponse["result"] == 601)
+            {
+              error = ApiErrorEnum.LIVE_STREAM_OVER;
             }
           else
             {
@@ -1679,6 +1702,7 @@ class   AppController extends GetxController {
         unfollowUserFrequentRequests.value = 0;
         unfollowUserOthers.value = 0;
         unfollowUserOffline.value = 0;
+        unfollowLiveStreamOver.value = 0;
         totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
 
         for (UserKuaishou userKuaishou in listFiltered) {
@@ -1721,6 +1745,10 @@ class   AppController extends GetxController {
                       else if(urlError.$2 == ApiErrorEnum.OFFLINE)
                       {
                         unfollowUserOffline.value = unfollowUserOffline.value + 1;
+                      }
+                      else if(urlError.$2 == ApiErrorEnum.LIVE_STREAM_OVER)
+                      {
+                        unfollowLiveStreamOver.value = unfollowLiveStreamOver.value + 1;
                       }
                   }
 
@@ -1790,6 +1818,7 @@ class   AppController extends GetxController {
         unfollowUserFrequentRequests.value = 0;
         unfollowUserOthers.value = 0;
         unfollowUserOffline.value = 0;
+        unfollowLiveStreamOver.value = 0;
         totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
 
 
@@ -1840,6 +1869,10 @@ class   AppController extends GetxController {
                     else if(result.$2 == ApiErrorEnum.OFFLINE)
                     {
                       unfollowUserOffline.value = unfollowUserOffline.value + 1;
+                    }
+                    else if(result.$2 == ApiErrorEnum.LIVE_STREAM_OVER)
+                    {
+                      unfollowLiveStreamOver.value = unfollowLiveStreamOver.value + 1;
                     }
                   }
                    totalUnfollowUserUploadedProgress.value = "${i+1}/${futureFlvUrlListResult.length}";
@@ -2119,6 +2152,66 @@ class   AppController extends GetxController {
     double kb = bytes / 1024;
     double mb = kb / 1024;
     return mb;
+  }
+
+  Future<void> cloneStreamTapeFolder () async
+  {
+    DialogUtils.showLoaderDialog(Get.context!,text: "Cloning.....");
+    DateTime dateTimeNow = DateTime.now();
+    DateTime dateTimeBeforeMonth = dateTimeNow.subtract(Duration(days: 30));
+    StreamTapeFolder streamTapeFolder = await fetchFolderList();
+    for(StreamTapeFolderItem streamTapeFolderItem in streamTapeFolder.folders!)
+      {
+        if(!streamTapeFolderItem.name!.toLowerCase().contains("clone"))
+          {
+            DateTime? folderDateTime;
+            try {
+              List<String> dateList = streamTapeFolderItem.name!.replaceAll("Kwai", "").replaceAll("kwai", "").trim().split(" ");
+              int day = int.parse(dateList[0]);
+              int month = int.parse(dateList[1]);
+              int year = int.parse("20"+dateList[2]);
+              folderDateTime = DateTime(year,month,day);
+            } catch (e) {
+              print(e);
+            }
+            if(folderDateTime != null && folderDateTime!.isBefore(dateTimeBeforeMonth))
+              {
+                try {
+                  String newFolderName = streamTapeFolderItem.name! + " Clone";
+                  List<String> toCopyFileId = [];
+                  (bool,String) status = await createFolder(newFolderName);
+                  if(status.$1)
+                   {
+                     StreamTapeFolder streamTapeFolder = await getFolderFiles(streamTapeFolderItem.id!);
+                     for(StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!)
+                       {
+                         toCopyFileId.add(streamtapeFileItem.linkid!);
+                       }
+                     String ids = convertListToArrayString(toCopyFileId);
+                     bool isCopied = await copyStreamTapeFiles(ids, status.$2);
+                     if(isCopied)
+                       {
+                         showToast(streamTapeFolderItem.name! + " Cloned Successfully.....");
+                         await deleteFolder(streamTapeFolderItem.id!);
+                       }
+                     else
+                       {
+                         showToast("Erro while cloning (${streamTapeFolderItem.name!})");
+                       }
+                   }
+                  else if (status.$2 == "500")
+                    {
+                      showToast("Folder already exists.... (${streamTapeFolderItem.name!})");
+                    }
+                } catch (e) {
+                  showToast(e.toString());
+                }
+              }
+
+          }
+      }
+    await getFolderList(isResume: true);
+    DialogUtils.stopLoaderDialog();
   }
 
 

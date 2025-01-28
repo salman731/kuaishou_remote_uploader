@@ -9,6 +9,7 @@ import 'dart:ui';
 
 import 'package:async/async.dart';
 import 'package:background_mode_new/background_mode_new.dart';
+import 'package:blinking_text/blinking_text.dart';
 import 'package:butterfly_dialog/butterfly_dialog.dart';
 import 'package:dropdown_textfield/dropdown_textfield.dart';
 import 'package:flutter/material.dart';
@@ -451,7 +452,6 @@ class _MyHomePageState extends State<MyHomePage> {
   FocusNode textFieldFocusNode = FocusNode();
 
 
-
   @override
   void initState() {
    /* Future.delayed(Duration(seconds: 5),(){
@@ -588,6 +588,17 @@ class _MyHomePageState extends State<MyHomePage> {
                     // print(response2);
                    case "streamtape_downloader":
                     Get.to(StreamtapeDownloadScreen());
+                   case "clone_streamtape_folders":
+                     ButterflyAlertDialog.show(
+                       context: Get.context!,
+                       title: 'Cloning',
+                       subtitle: 'Are you want to clone......',
+                       alertType: AlertType.warning,
+                       onConfirm: () async {
+                         await appController.cloneStreamTapeFolder();
+                       },
+                     );
+
                   case "add_user":
                     DialogUtils.showUserListDialog(context);
                   case "get_follow_live_api_cookie":
@@ -613,6 +624,13 @@ class _MyHomePageState extends State<MyHomePage> {
                 PopupMenuItem<String>(value: "import_users", child: Text('Import Users')),
                 PopupMenuItem<String>(value: "get_follow_live_api_cookie", child: Text('Get Follow Live Api Cookie')),
                 PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
+                PopupMenuItem<String>(value: "clone_streamtape_folders", child: DateTime.now().day == 1 ? BlinkText(
+                  'Clone Streamtape Folder',
+                  beginColor: Colors.black,
+                  endColor: Colors.green,
+                  times: 50,
+                  duration: Duration(milliseconds: 500),
+                )  : Text('Clone Streamtape Folder')),
                 PopupMenuItem(
                   child: Obx(()=> CheckboxListTile(
                     activeColor: Colors.blue,
@@ -820,6 +838,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       Text("Execption Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
                       Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
                       Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
+                      Text("Live Stream Over : ${appController.unfollowLiveStreamOver.value}",style: TextStyle(color: Colors.purple),),
                       Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
                       Text("Unfollow Timer Interval (Unfollow Users)"),
                       Slider(
@@ -887,77 +906,87 @@ class _MyHomePageState extends State<MyHomePage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
 
-                    Container(
-                    padding: EdgeInsets.all(8.0),
-                    decoration: BoxDecoration(// Background color
-                      borderRadius: BorderRadius.circular(5.0),
-                      border: Border.all(
-                        color: Colors.black, // Border color
-                        width: 2.0,
+                  ExpansionTile(
+                    title: Text(
+                      'Controls',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 20,
                       ),
-                    ), //     <-- TextField expands to this height.
-                    child: TextField(
-                      controller: appController.folderTextEditingController,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        suffixIcon: IconButton(
-                          onPressed: () async {
-                            if(!appController.isGoingToRenameFolder.value)
-                              {
-                                bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
-                                if(!isFolderExists)
+                      textAlign: TextAlign.center,
+                    ),
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8.0),
+                        decoration: BoxDecoration(// Background color
+                          borderRadius: BorderRadius.circular(5.0),
+                          border: Border.all(
+                            color: Colors.black, // Border color
+                            width: 2.0,
+                          ),
+                        ), //     <-- TextField expands to this height.
+                        child: TextField(
+                          controller: appController.folderTextEditingController,
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            suffixIcon: IconButton(
+                              onPressed: () async {
+                                if(!appController.isGoingToRenameFolder.value)
                                 {
-                                  DialogUtils.showLoaderDialog(context,text: "Creating folder.....");
-                                  (bool,String) isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
-                                  if(isFolderCreated.$1)
+                                  bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
+                                  if(!isFolderExists)
                                   {
-                                    appController.folderTextEditingController.clear();
-                                    await appController.getFolderList();
-                                    appController.showToast("Folder Created Successfully");
+                                    DialogUtils.showLoaderDialog(context,text: "Creating folder.....");
+                                    (bool,String) isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
+                                    if(isFolderCreated.$1)
+                                    {
+                                      appController.folderTextEditingController.clear();
+                                      await appController.getFolderList();
+                                      appController.showToast("Folder Created Successfully");
+                                    }
+                                    else
+                                    {
+                                      appController.showToast("There is error while creating folder");
+                                    }
+                                    DialogUtils.stopLoaderDialog();
                                   }
                                   else
                                   {
-                                    appController.showToast("There is error while creating folder");
+                                    appController.showToast("Folder already exists");
                                   }
+                                }
+                                else
+                                {
+                                  DialogUtils.showLoaderDialog(context,text: "Renaming folder....");
+                                  bool isUpdated = await appController.renameFolder(appController.folderTextEditingController.text, appController.selectedFolder.value.id!);
+                                  if(isUpdated)
+                                  {
+                                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, appController.folderTextEditingController.text);
+                                    appController.folderTextEditingController.clear();
+                                    appController.isGoingToRenameFolder.value = false;
+                                    appController.update(["updateFolderIcons"]);
+                                    appController.showToast("Folder Renamed Successfully...");
+                                  }
+                                  else
+                                  {
+                                    appController.showToast("There is error while renaming folder");
+                                  }
+                                  await appController.getFolderList();
                                   DialogUtils.stopLoaderDialog();
-                                }
-                                else
-                                {
-                                  appController.showToast("Folder already exists");
-                                }
-                              }
-                            else
-                              {
-                                DialogUtils.showLoaderDialog(context,text: "Renaming folder....");
-                                bool isUpdated = await appController.renameFolder(appController.folderTextEditingController.text, appController.selectedFolder.value.id!);
-                                if(isUpdated)
-                                {
-                                  SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, appController.folderTextEditingController.text);
-                                  appController.folderTextEditingController.clear();
-                                  appController.isGoingToRenameFolder.value = false;
-                                  appController.update(["updateFolderIcons"]);
-                                  appController.showToast("Folder Renamed Successfully...");
-                                }
-                                else
-                                {
-                                  appController.showToast("There is error while renaming folder");
-                                }
-                                await appController.getFolderList();
-                                DialogUtils.stopLoaderDialog();
 
-                              }
+                                }
 
-                          },
-                          icon: Obx(()=> appController.isGoingToRenameFolder.value ? Icon(Icons.update) : Icon(Icons.create_new_folder)),
+                              },
+                              icon: Obx(()=> appController.isGoingToRenameFolder.value ? Icon(Icons.update) : Icon(Icons.create_new_folder)),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  SizedBox(height: 10,),
-                  Obx(()=>Center(
-                    child: Row(
-                      children: [
-                        /*Expanded(
+                      SizedBox(height: 10,),
+                      Obx(()=>Center(
+                        child: Row(
+                          children: [
+                            /*Expanded(
                           child: Container(
                             padding: EdgeInsets.all(8.0),
                             decoration: BoxDecoration(// Background color
@@ -987,70 +1016,70 @@ class _MyHomePageState extends State<MyHomePage> {
                             ),
                           ),
                         ),*/
-                        Expanded(
-                          child: Container(
-                            padding: EdgeInsets.all(8.0),
-                            decoration: BoxDecoration(// Background color
-                              borderRadius: BorderRadius.circular(5.0),
-                              border: Border.all(
-                                color: Colors.black, // Border color
-                                width: 2.0,
+                            Expanded(
+                              child: Container(
+                                padding: EdgeInsets.all(8.0),
+                                decoration: BoxDecoration(// Background color
+                                  borderRadius: BorderRadius.circular(5.0),
+                                  border: Border.all(
+                                    color: Colors.black, // Border color
+                                    width: 2.0,
+                                  ),
+                                ),
+                                child: DropDownTextField(
+                                  initialValue: appController.selectedFolder.value.name,
+                                  textFieldDecoration: InputDecoration(
+                                      border: InputBorder.none
+                                  ),
+                                  clearOption: false,
+                                  textFieldFocusNode: textFieldFocusNode,
+                                  searchFocusNode: searchFocusNode,
+                                  // searchAutofocus: true,
+                                  dropDownItemCount: 10,
+                                  searchShowCursor: false,
+                                  enableSearch: true,
+                                  searchKeyboardType: TextInputType.text,
+                                  dropDownList: appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
+                                    return DropDownValueModel(name: value.name!, value: value.id);
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    appController.selectedFolder.value = StreamTapeFolderItem(name:val.name!,id:val.value!)!;
+                                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, val.name!);
+                                    SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, val.value!);
+                                  },
+                                ),
                               ),
                             ),
-                            child: DropDownTextField(
-                              initialValue: appController.selectedFolder.value.name,
-                              textFieldDecoration: InputDecoration(
-                                border: InputBorder.none
-                              ),
-                              clearOption: false,
-                              textFieldFocusNode: textFieldFocusNode,
-                              searchFocusNode: searchFocusNode,
-                              // searchAutofocus: true,
-                              dropDownItemCount: 10,
-                              searchShowCursor: false,
-                              enableSearch: true,
-                              searchKeyboardType: TextInputType.text,
-                              dropDownList: appController.streamTapeFolder!.folders!.map((StreamTapeFolderItem value) {
-                                return DropDownValueModel(name: value.name!, value: value.id);
-                              }).toList(),
-                              onChanged: (val) {
-                                appController.selectedFolder.value = StreamTapeFolderItem(name:val.name!,id:val.value!)!;
-                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, val.name!);
-                                SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, val.value!);
+                            GetBuilder<AppController>(
+                              id:"updateFolderIcons",
+                              builder: (_){
+                                if(!appController.isGoingToRenameFolder.value)
+                                {
+                                  return IconButton(
+                                    onPressed: () async {
+                                      appController.isGoingToRenameFolder.value = true;
+                                      appController.folderTextEditingController.text = appController.selectedFolder.value.name!;
+                                      appController.update(["updateFolderIcons"]);
+                                    },
+                                    icon: Icon(Icons.drive_file_rename_outline),
+                                  );
+                                }
+                                else
+                                {
+                                  return IconButton(
+                                    onPressed: () async {
+                                      appController.isGoingToRenameFolder.value = false;
+                                      appController.folderTextEditingController.text = "";
+                                      appController.update(["updateFolderIcons"]);
+                                    },
+                                    icon: Icon(Icons.cancel),
+                                  );
+                                }
                               },
                             ),
-                          ),
-                        ),
-                        GetBuilder<AppController>(
-                          id:"updateFolderIcons",
-                          builder: (_){
-                            if(!appController.isGoingToRenameFolder.value)
-                              {
-                                return IconButton(
-                                  onPressed: () async {
-                                    appController.isGoingToRenameFolder.value = true;
-                                    appController.folderTextEditingController.text = appController.selectedFolder.value.name!;
-                                    appController.update(["updateFolderIcons"]);
-                                  },
-                                  icon: Icon(Icons.drive_file_rename_outline),
-                                );
-                              }
-                            else
-                              {
-                                return IconButton(
-                                  onPressed: () async {
-                                    appController.isGoingToRenameFolder.value = false;
-                                    appController.folderTextEditingController.text = "";
-                                    appController.update(["updateFolderIcons"]);
-                                  },
-                                  icon: Icon(Icons.cancel),
-                                );
-                              }
-                          },
-                        ),
-                          Obx(()=> Opacity(
-                            opacity: appController.isGoingToRenameFolder.value ? 0.5 : 1,
-                            child: IconButton(
+                            Obx(()=> Opacity(
+                              opacity: appController.isGoingToRenameFolder.value ? 0.5 : 1,
+                              child: IconButton(
                                 onPressed: appController.isGoingToRenameFolder.value ? null : () async {
                                   ButterflyAlertDialog.show(
                                     context: Get.context!,
@@ -1075,41 +1104,43 @@ class _MyHomePageState extends State<MyHomePage> {
                                 },
                                 icon: Icon(Icons.delete_forever),
                               ),
-                          ),
-                          )
+                            ),
+                            )
 
-                      ],
-                    ),
-                  ),
-                  ),
-                  SizedBox(height: 10,),
-                  Container(
-                    padding: EdgeInsets.all(8.0),
-                    decoration: BoxDecoration(// Background color
-                      borderRadius: BorderRadius.circular(5.0),
-                      border: Border.all(
-                        color: Colors.black, // Border color
-                        width: 2.0,
+                          ],
+                        ),
                       ),
-                    ),
-                    height: 150, //     <-- TextField expands to this height.
-                    child: TextField(
-                      controller: appController.urlTextEditingController,
-                      maxLines: null, // Set this
-                      expands: true, // and this
-                      keyboardType: TextInputType.multiline,
-                      decoration: InputDecoration(border: InputBorder.none,),
-                      onChanged: (value){
-                        // Move cursor to next line when url is pasted;
-                        if(value.length - previousTextFieldTxt!.length > 1)
-                          {
-                            appController.urlTextEditingController.text = value + "\n";
-                            previousTextFieldTxt = value + "\n";
-                            return;
-                          }
-                        previousTextFieldTxt = value;
-                      },
-                    ),
+                      ),
+                      SizedBox(height: 10,),
+                      Container(
+                        padding: EdgeInsets.all(8.0),
+                        decoration: BoxDecoration(// Background color
+                          borderRadius: BorderRadius.circular(5.0),
+                          border: Border.all(
+                            color: Colors.black, // Border color
+                            width: 2.0,
+                          ),
+                        ),
+                        height: 150, //     <-- TextField expands to this height.
+                        child: TextField(
+                          controller: appController.urlTextEditingController,
+                          maxLines: null, // Set this
+                          expands: true, // and this
+                          keyboardType: TextInputType.multiline,
+                          decoration: InputDecoration(border: InputBorder.none,),
+                          onChanged: (value){
+                            // Move cursor to next line when url is pasted;
+                            if(value.length - previousTextFieldTxt!.length > 1)
+                            {
+                              appController.urlTextEditingController.text = value + "\n";
+                              previousTextFieldTxt = value + "\n";
+                              return;
+                            }
+                            previousTextFieldTxt = value;
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: 10,),
                   GetBuilder<AppController>(
