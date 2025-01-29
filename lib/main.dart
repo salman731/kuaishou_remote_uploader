@@ -514,6 +514,10 @@ class _MyHomePageState extends State<MyHomePage> {
       {
         return Colors.red;
       }
+    else if (status == "new")
+      {
+        return Colors.blue;
+      }
     else
       {
         return Colors.black;
