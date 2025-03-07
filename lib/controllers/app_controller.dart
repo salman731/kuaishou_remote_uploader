@@ -1283,6 +1283,30 @@ class   AppController extends GetxController {
     }
   }
 
+  Future<(String?, String?)?> getMp4UrlFromStreamTape2(String embededUrl, {bool isVideotoEmbededAllowed = false, Map<String, String>? headers}) async
+  {
+    if (isVideotoEmbededAllowed) {
+      embededUrl = embededUrl.replaceAll("/v/", "/e/");
+    }
+    try {
+      dom.Document document = await WebUtils.getDomFromURL_Get(embededUrl, headers: headers);
+      String? imageUrl;
+      if (document.querySelector("meta[name=\"og:image\"]") != null) {
+        imageUrl = document.querySelector("meta[name=\"og:image\"]")!.attributes["content"];
+      }
+      String? botlink = document.querySelector("#botlink")!.text;
+      // List<dom.Element> list = document.querySelectorAll("script");
+      // String? javaScript = list[9].text;
+      // String? tokenString = getStringBetweenTwoStrings("<script>document.getElementById('ideoolink').innerHTML =", "')", javaScript);
+      // String? token = getStringAfterStartStringToEnd("&token=", tokenString);
+      String dlUrl = "http:/" + botlink + "&stream=1";
+      //String dlUrl = "https:/" + ideooLink + "&dl=1s";
+      return (dlUrl, imageUrl);
+    } catch (e) {
+      Fluttertoast.showToast(msg: "Unable to get Streamtape downoad url", toastLength: Toast.LENGTH_LONG, backgroundColor: Colors.red);
+    }
+  }
+
   String getStringBetweenTwoStrings(String start, String end, String str) {
     final startIndex = str.indexOf(start);
     final endIndex = str.indexOf(end, startIndex + start.length);
@@ -1321,7 +1345,7 @@ class   AppController extends GetxController {
 
     //if (downloadItem!.downloadUrl == null || downloadItem!.downloadUrl == "Press Download icon to get link...."  || downloadItem!.downloadUrl == "Unable to get download url....") {
     try {
-      (String?, String?)? mp4ImageUrl = await getMp4UrlFromStreamTape(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: true);
+      (String?, String?)? mp4ImageUrl = await getMp4UrlFromStreamTape2(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: true);
       downloadItem!.downloadUrl = mp4ImageUrl!.$1 != null ? mp4ImageUrl!.$1 : "Unable to get download url....";
       downloadItem!.imageUrl = mp4ImageUrl!.$2 != null ? mp4ImageUrl!.$2 : "";
     } catch (e) {
