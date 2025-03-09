@@ -35,6 +35,7 @@ import 'package:kuaishou_remote_uploader/utils/web_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/web_view_utils.dart';
 import 'package:kuaishou_remote_uploader/widgets/custom_button.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:restart/restart.dart';
 import 'package:sizer/sizer.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
@@ -57,7 +58,7 @@ const notificationChannelId = 'my_foreground';
 
 const notificationId = 888;
 
-Future<void> initializeService() async {
+Future<void> initializeService(bool autoStartService) async {
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     notificationChannelId, // id
@@ -75,15 +76,15 @@ Future<void> initializeService() async {
       ?.createNotificationChannel(channel);
   await service.configure(
     iosConfiguration: IosConfiguration(
-      autoStart: true,
+      autoStart: autoStartService,
       onForeground: onStart,
       onBackground: onIosBackground,
     ),
     androidConfiguration: AndroidConfiguration(
-      autoStart: true,
+      autoStart: autoStartService,
       onStart: onStart,
       isForegroundMode: false,
-      autoStartOnBoot: true,
+      autoStartOnBoot: autoStartService,
       notificationChannelId: notificationChannelId, // this must match with notification channel you created above.
       initialNotificationTitle: 'AWESOME SERVICE',
       initialNotificationContent: 'Initializing',
@@ -385,10 +386,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final appDocumentDirectory = await getApplicationDocumentsDirectory();
   Hive.init(appDocumentDirectory.path);
-  await initializeService();
   await SharedPrefsUtil.initSharedPreference();
-  startBackgroundService();
-  runApp( MyApp());
+  await initializeService(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING,defaultValue: false));
+  if (SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING,defaultValue: false)) {
+    await Future.delayed(Duration(seconds: 3));
+    startBackgroundService();
+ }
+
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -605,6 +610,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
                   case "add_user":
                     DialogUtils.showUserListDialog(context);
+                  case "get_unfollow_live_cookie":
+                    await appController.verifyCaptcha(isForced: true);
                   case "get_follow_live_api_cookie":
                     WebViewUtils webViewUtils = WebViewUtils();
                     await webViewUtils.showWebViewDialog("https://live.kuaishou.com/my-follow/living", ".flv",isDesktop: true,isToGetFollowApi: true,header: {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"});
@@ -627,6 +634,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 PopupMenuItem<String>(value: "export_users", child: Text('Export Users')),
                 PopupMenuItem<String>(value: "import_users", child: Text('Import Users')),
                 PopupMenuItem<String>(value: "get_follow_live_api_cookie", child: Text('Get Follow Live Api Cookie')),
+                PopupMenuItem<String>(value: "get_unfollow_live_cookie", child: Text('Get Unfollow Live Cookie')),
                 PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
                 PopupMenuItem<String>(value: "clone_streamtape_folders", child: DateTime.now().day == 1 ? BlinkText(
                   'Clone Streamtape Folder',
@@ -635,6 +643,50 @@ class _MyHomePageState extends State<MyHomePage> {
                   times: 50,
                   duration: Duration(milliseconds: 500),
                 )  : Text('Clone Streamtape Folder')),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isUploadingEnable.value,
+                    onChanged: (value) async {
+                      appController.isUploadingEnable.value = !appController.isUploadingEnable.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING, appController.isUploadingEnable.value);
+                      if(appController.isUploadingEnable.value)
+                        {
+                          if(!(await isServiceRunning()))
+                          {
+                            startBackgroundService();
+                          }
+                          appController.initiateUnfollowUploadingProcess();
+                        }
+                      else
+                        {
+                          if(await isServiceRunning())
+                          {
+                            stopBackgroundService();
+                          }
+                          appController.cancelUnfollowTimer();
+                        }
+                      //await restart();
+                    },
+                    title: Text("Enable Uploading to Streamtape"),
+                  ),
+
+                  ),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isEnableStreamTapeUrlFromEmbeded.value,
+                    onChanged: (value) async {
+                      appController.isEnableStreamTapeUrlFromEmbeded.value = !appController.isEnableStreamTapeUrlFromEmbeded.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_ENABLE_STREAMTAPE_FETCH_FROM_EMBEDED, appController.isEnableStreamTapeUrlFromEmbeded.value);
+                      //await restart();
+                    },
+                    title: Text("Enable Streamtape Download with Embeded"),
+                  ),
+
+                  ),
+                ),
                 PopupMenuItem(
                   child: Obx(()=> CheckboxListTile(
                     activeColor: Colors.blue,

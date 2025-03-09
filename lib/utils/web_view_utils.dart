@@ -7,7 +7,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
-
+import 'package:restart/restart.dart';
 class WebViewUtils
 {
 
@@ -124,7 +124,8 @@ class WebViewUtils
          IconButton(onPressed: () async {
            if (!isToGetFollowApi) {
              var result = await inAppWebViewController.evaluateJavascript(source: "document.cookie");
-             SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, result.toString().split(";")[0]);
+             String cookie = result.toString().split(";").where((cookie)=>cookie.contains("did")).first;
+             SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, cookie);
              SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
              Get.back();
            } else {
@@ -142,6 +143,7 @@ class WebViewUtils
              );
              Get.back();
            }
+           await restart();
          }, icon: Icon(Icons.add))
        ],
      );

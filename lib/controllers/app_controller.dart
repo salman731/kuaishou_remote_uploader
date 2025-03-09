@@ -100,6 +100,8 @@ class   AppController extends GetxController {
   RxBool isWebPageProcessing = true.obs;
   RxBool isBackgroundModeEnable = false.obs;
   RxBool isConcurrentUnfollowUploadingEnable = true.obs;
+  RxBool isUploadingEnable = false.obs;
+  RxBool isEnableStreamTapeUrlFromEmbeded = false.obs;
   RxString downloadLinks = "".obs;
   List<DownloadItem> downloadLinksList = [];
   List<DownloadItem> filterdownloadLinksList = [];
@@ -158,6 +160,8 @@ class   AppController extends GetxController {
     isWebPageProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, defaultValue: true);
     isBackgroundModeEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_BACKGROUNDMODE_ENABLE, defaultValue: false);
     isConcurrentUnfollowUploadingEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_CONCURRENT_UNFOLLOW_USER_UPLOADING, defaultValue: true);
+    isUploadingEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING, defaultValue: false);
+    isEnableStreamTapeUrlFromEmbeded.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_STREAMTAPE_FETCH_FROM_EMBEDED, defaultValue: false);
     processBackgroundMode();
     midNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, defaultValue: 15); // 12:00 AM -> 06:00 AM
     morningAfterNoonSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, defaultValue: 10); // 6:00 AM -> 4:00 PM
@@ -1259,7 +1263,7 @@ class   AppController extends GetxController {
         isThumbnailUpdating: false.obs);
   }
 
-  Future<(String?, String?)?> getMp4UrlFromStreamTape(String embededUrl, {bool isVideotoEmbededAllowed = false, Map<String, String>? headers}) async
+  Future<(String?, String?)?> getMp4UrlFromStreamTapeEmbded(String embededUrl, {bool isVideotoEmbededAllowed = false, Map<String, String>? headers}) async
   {
     if (isVideotoEmbededAllowed) {
       embededUrl = embededUrl.replaceAll("/v/", "/e/");
@@ -1283,6 +1287,32 @@ class   AppController extends GetxController {
     }
   }
 
+  Future<(String?, String?)?> getMp4UrlFromStreamTapeVideo(String embededUrl, {bool isVideotoEmbededAllowed = false, Map<String, String>? headers}) async
+  {
+    if (isVideotoEmbededAllowed) {
+      //embededUrl = embededUrl.replaceAll("/v/", "/e/");
+    }
+    try {
+      dom.Document document = await WebUtils.getDomFromURL_Get(embededUrl, headers: headers);
+      String? imageUrl;
+      if (document.querySelector("meta[name=\"og:image\"]") != null) {
+        imageUrl = document.querySelector("meta[name=\"og:image\"]")!.attributes["content"];
+      }
+      document.body!.innerHtml;
+      String? botlink = document.querySelector("#ideoooolink")!.text;
+      List<dom.Element> list = document.querySelectorAll("script");
+      String? javaScript = list.where((item) => item.text.contains("document.getElementById('ideoooolink').innerHTML")).first.text;
+      String? tokenString = getStringBetweenTwoStrings("document.getElementById('ideoooolink').innerHTML = \"", "')", javaScript);
+      String? token = getStringAfterStartStringToEnd("&token=", tokenString);
+      String tempUrl  = getStringBefore(botlink, "&token=");
+      String dlUrl = "http:/" + tempUrl + "&token=$token&stream=1";
+      //String dlUrl = "https:/" + ideooLink + "&dl=1s";
+      return (dlUrl, imageUrl);
+    } catch (e) {
+      Fluttertoast.showToast(msg: "Unable to get Streamtape downoad url", toastLength: Toast.LENGTH_LONG, backgroundColor: Colors.red);
+    }
+  }
+
   String getStringBetweenTwoStrings(String start, String end, String str) {
     final startIndex = str.indexOf(start);
     final endIndex = str.indexOf(end, startIndex + start.length);
@@ -1296,6 +1326,18 @@ class   AppController extends GetxController {
     return str.substring(startIndex + start.length, str.length);
   }
 
+  String getStringBefore(String input, String delimiter) {
+    // Find the index of the delimiter in the input string
+    int index = input.indexOf(delimiter);
+
+    // If the delimiter is not found, return the entire string
+    if (index == -1) {
+      return input;
+    }
+
+    // Return the substring before the delimiter
+    return input.substring(0, index);
+  }
 
   getDownloadLinks(String id) async
   {
@@ -1306,7 +1348,7 @@ class   AppController extends GetxController {
     StringBuffer stringBuffer = StringBuffer("");
     StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
     for (StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!) {
-      downloadLinksList.add(DownloadItem(streamtapeFileItem.name, "Press Download icon to get link....", "", streamtapeFileItem.link!, false.obs, false.obs,Uint8List.fromList([]),false));
+      downloadLinksList.add(DownloadItem(streamtapeFileItem.name, "Press Download icon to get link....", "", streamtapeFileItem.link!, false.obs, false.obs,Uint8List.fromList([]),false,convertBytes(streamtapeFileItem.size!)));
       //stringBuffer.write(mp4ImageUrl.$1! +"\n\n");
       //downloadLinks.value = stringBuffer.toString();
       this.update(["updateStreamtapeDownloadingList"]);
@@ -1321,7 +1363,8 @@ class   AppController extends GetxController {
 
     //if (downloadItem!.downloadUrl == null || downloadItem!.downloadUrl == "Press Download icon to get link...."  || downloadItem!.downloadUrl == "Unable to get download url....") {
     try {
-      (String?, String?)? mp4ImageUrl = await getMp4UrlFromStreamTape(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: true);
+      bool isEmbeded = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_STREAMTAPE_FETCH_FROM_EMBEDED, defaultValue: false);
+      (String?, String?)? mp4ImageUrl = isEmbeded ? await getMp4UrlFromStreamTapeEmbded(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: true) : await getMp4UrlFromStreamTapeVideo(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: false);
       downloadItem!.downloadUrl = mp4ImageUrl!.$1 != null ? mp4ImageUrl!.$1 : "Unable to get download url....";
       downloadItem!.imageUrl = mp4ImageUrl!.$2 != null ? mp4ImageUrl!.$2 : "";
     } catch (e) {
@@ -1708,7 +1751,6 @@ class   AppController extends GetxController {
         for (UserKuaishou userKuaishou in listFiltered) {
             try {
               String initialUrl = "https://v.kuaishou.com${userKuaishou.value!.replaceAll("<||>UNFOLLOW", "")}";
-
               String cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
               bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
               if (cookie.isNotEmpty && !isCaptchaRequired) {
@@ -1737,6 +1779,7 @@ class   AppController extends GetxController {
                     else if(urlError.$2 == ApiErrorEnum.FREQUENT_REQUESTS)
                       {
                         unfollowUserFrequentRequests.value = unfollowUserFrequentRequests.value + 1;
+                        SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, true);
                       }
                       else if(urlError.$2 == ApiErrorEnum.OTHERS)
                       {
@@ -1766,16 +1809,18 @@ class   AppController extends GetxController {
       });
     }
   }
-  Future initiateUnfollowUploadingProcess () async
+  Future initiateUnfollowUploadingProcess() async
   {
-    if(isConcurrentUnfollowUploadingEnable.value)
-      {
-        await initiateUnfollowUploadingProcessConcurrent();
-      }
-    else
-      {
-        await initiateUnfollowUploadingProcessSequence();
-      }
+    if (SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING,defaultValue: false)) {
+      if(isConcurrentUnfollowUploadingEnable.value)
+            {
+              await initiateUnfollowUploadingProcessConcurrent();
+            }
+          else
+            {
+              await initiateUnfollowUploadingProcessSequence();
+            }
+    }
   }
   Future initiateUnfollowUploadingProcessConcurrent () async
   {
@@ -1861,6 +1906,7 @@ class   AppController extends GetxController {
                     else if(result.$2 == ApiErrorEnum.FREQUENT_REQUESTS)
                     {
                       unfollowUserFrequentRequests.value = unfollowUserFrequentRequests.value + 1;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, true);
                     }
                     else if(result.$2 == ApiErrorEnum.OTHERS)
                     {
@@ -2003,12 +2049,16 @@ class   AppController extends GetxController {
     return isUserAvailable;
   }
 
- Future verifyCaptcha({bool isRefresh = false}) async
+ Future verifyCaptcha({bool isRefresh = false,bool isForced = false}) async
   {
-    if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty)
+    if((SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty) || isForced)
     {
+      List<UserKuaishou> list = getAllUserList();
+      List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+      var randomU = listFiltered[Random().nextInt(listFiltered.length)];
+      String finalUrl = "https://v.kuaishou.com${randomU.value!.replaceAll("<||>UNFOLLOW", "")}";
       WebViewUtils webViewUtils = WebViewUtils();
-      await webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
+      await webViewUtils.showWebViewDialog(finalUrl, ".flv");
       if (isRefresh) {
         await initiateUnfollowUploadingProcess();
       }
@@ -2215,6 +2265,20 @@ class   AppController extends GetxController {
   }
 
 
+  void cancelUnfollowTimer()
+  {
+    if(unfollowUserTimer != null)
+    {
+      unfollowUserTimer!.cancel();
+      unfollowUserTimer == null;
+    }
+    for(StopWatchTimer stopwatch in unfollowUserStopwatch)
+    {
+      stopwatch.onStopTimer();
+    }
+    unfollowUserStopwatch = [];
+  }
+
   // List<StreamtapeFileItem> singleGroupStreamTapeFiles = [];
   // var groupedByTimeStamp = <int, List<StreamtapeFileItem>>{};
   //
@@ -2249,5 +2313,38 @@ class   AppController extends GetxController {
   // toDeleteFileList.add(streamtapeFileItem.linkid!);
   // }
   // }
+
+  String convertBytes(int bytes) {
+    String result = "N/A";
+    try {
+      double mb = bytes / (1024 * 1024);
+
+      // If MB is less than 1024, return the MB value
+      if (mb < 1024) {
+          result = "${mb.toStringAsFixed(2)} MB";
+          } else {
+            // Convert MB to GB if greater than 1024
+            double gb = mb / 1024;
+            result = "${gb.toStringAsFixed(2)} GB";
+          }
+    } catch (e) {
+
+    }
+    return result;
+  }
+
+  verifiyCaptchaManual () async {
+    //if((SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty))
+    //{
+      WebViewUtils webViewUtils = WebViewUtils();
+      webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
+      await Future.delayed(Duration(seconds: 20));
+      var result = await webViewUtils.inAppWebViewController.evaluateJavascript(source: "document.cookie");
+      String cookie = result.toString().split(";").where((cookie)=>cookie.contains("did")).first;
+      SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, cookie);
+      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
+      Get.back();
+    //}
+  }
 
 }

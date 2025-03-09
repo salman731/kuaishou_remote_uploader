@@ -22,5 +22,7 @@ class DownloadItem
 
   bool? isUrlImage = false;
 
-  DownloadItem(this.name, this.downloadUrl,this.imageUrl,this.streamTapeUrl,this.isLoading,this.isSelected,this.imageBytes,this.isUrlImage);
+  String? size;
+
+  DownloadItem(this.name, this.downloadUrl,this.imageUrl,this.streamTapeUrl,this.isLoading,this.isSelected,this.imageBytes,this.isUrlImage,this.size);
 }

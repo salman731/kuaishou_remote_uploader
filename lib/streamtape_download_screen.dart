@@ -266,7 +266,7 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                                       Expanded(child: Padding(
                                         padding: const EdgeInsets.all(1.0),
                                         child: ListTile(
-                                          title: Text(appController.currentDownloadList[index]!.name!,style: TextStyle(fontSize: 10 ),),
+                                          title: Text.rich(TextSpan(children: [TextSpan(text: "${appController.currentDownloadList[index]!.name!}\n",style: TextStyle(fontSize: 10 )),TextSpan(text: "Size : ${appController.currentDownloadList[index]!.size!}",style: TextStyle(fontSize: 10,color: Colors.green,fontWeight: FontWeight.bold))])),
                                           subtitle: Text(appController.currentDownloadList[index]!.downloadUrl!,style: TextStyle(fontSize: 7 ),),
                                           contentPadding: EdgeInsets.all(2),
                                         ),
