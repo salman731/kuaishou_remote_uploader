@@ -34,7 +34,9 @@ import 'package:kuaishou_remote_uploader/models/streamtape_download_status.dart'
 import 'package:kuaishou_remote_uploader/models/streamtape_file_item.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
+import 'package:kuaishou_remote_uploader/models/tiktok_live_response.dart';
 import 'package:kuaishou_remote_uploader/models/user_kuaishou.dart';
+import 'package:kuaishou_remote_uploader/utils/gist_service.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/web_utils.dart';
@@ -43,6 +45,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:external_path/external_path.dart';
+import 'package:flutter/src/widgets/text.dart' as txt;
+import 'package:random_user_agents/random_user_agents.dart';
+import 'package:flutter/services.dart';
+
 
 
 
@@ -69,6 +75,7 @@ class   AppController extends GetxController {
   String KOUAISHOU_LIVE_FOLLOW_API = "https://live.kuaishou.com/live_api/follow/living";
   String KOUAISHOU_USER_API = "https://live.kuaishou.com/live_api/profile/public?count=4&pcursor=&principalId=s14042236&hasMore=true";
   String HTTPIE_PROXY_URL = "https://httpie.io/app/api/proxy";
+  String USER_AGENT_LIST_URL = "https://gist.githubusercontent.com/eteubert/1dd9692d4dfa2548fbfb550782daa95e/raw/988af488af6994a309756927ac3a380c66e4badf/user_agents.csv";
 
   HeadlessInAppWebView? headlessInAppWebView;
   InAppWebViewController? inAppWebViewController;
@@ -91,7 +98,10 @@ class   AppController extends GetxController {
   Completer downloadingCompleter = Completer();
   late Box downloadingListIdBox;
   late Box usernameListIdBox;
+  late Box unfollowUrlListIdBox;
   late Box unfollowUserUrlListBox;
+  Box? kuaishouLiveUserListBox;
+  Box? tiktokUserUrlListBox;
 
   ScrollController scrollController = ScrollController();
 
@@ -100,7 +110,10 @@ class   AppController extends GetxController {
   RxBool isWebPageProcessing = true.obs;
   RxBool isBackgroundModeEnable = false.obs;
   RxBool isConcurrentUnfollowUploadingEnable = true.obs;
+  RxBool isRandomCaptchaUserEnable = true.obs;
+  RxBool isUnfollowUploadwithDeplayEnable = true.obs;
   RxBool isUploadingEnable = false.obs;
+  RxBool isAutoUnfollowCaptchaVerification = true.obs;
   RxBool isEnableStreamTapeUrlFromEmbeded = false.obs;
   RxString downloadLinks = "".obs;
   List<DownloadItem> downloadLinksList = [];
@@ -137,6 +150,8 @@ class   AppController extends GetxController {
   RxInt unfollowUserOffline = 0.obs;
   RxInt unfollowLiveStreamOver = 0.obs;
   RxBool isToUpdateFolder = false.obs;
+  static bool isVerifyCaptchaShowing = false;
+  static bool isUnfollowExceptionOccured = false;
 
   /* initTimer()
   {
@@ -160,7 +175,10 @@ class   AppController extends GetxController {
     isWebPageProcessing.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_WEB_PAGE_PROCESS, defaultValue: true);
     isBackgroundModeEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_BACKGROUNDMODE_ENABLE, defaultValue: false);
     isConcurrentUnfollowUploadingEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_CONCURRENT_UNFOLLOW_USER_UPLOADING, defaultValue: true);
+    isRandomCaptchaUserEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_RANDOM_CAPTCHA_USER, defaultValue: false);
+    isUnfollowUploadwithDeplayEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UNFOLLOW_UPLOAD_WITH_DELAY, defaultValue: false);
     isUploadingEnable.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING, defaultValue: false);
+    isAutoUnfollowCaptchaVerification.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_AUTO_UNFOLLOW_USER_CAPTCHA_VERIFICATION, defaultValue: true);
     isEnableStreamTapeUrlFromEmbeded.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_STREAMTAPE_FETCH_FROM_EMBEDED, defaultValue: false);
     processBackgroundMode();
     midNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, defaultValue: 15); // 12:00 AM -> 06:00 AM
@@ -170,14 +188,18 @@ class   AppController extends GetxController {
     unfollowApiIntervalRangeValue.value = getRangeValuesFromString(SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL, defaultValue: "15:25"));
     downloadingListIdBox = await Hive.openBox("downloadingListId");
     usernameListIdBox = await Hive.openBox("usernameListIdBox");
+    unfollowUrlListIdBox = await Hive.openBox("unfollowUrlListIdBox");
     unfollowUserUrlListBox = await Hive.openBox("unfollowUserUrlListBox");
+    tiktokUserUrlListBox = await Hive.openBox("tiktokUserUrlListBox");
+    kuaishouLiveUserListBox = await Hive.openBox("kuaishouLiveUserListBox");
     String? cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_COOKIE);
     String? csrf = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_STREAMTAPE_CSRF_TOKEN);
     String cookieKuaishou = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
     bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
+    bool isAutoCaptcha =  SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_AUTO_UNFOLLOW_USER_CAPTCHA_VERIFICATION,defaultValue: true);
 
 
-    if(cookie.isNotEmpty && csrf.isNotEmpty && cookieKuaishou.isNotEmpty && !isCaptchaRequired)
+    if(cookie.isNotEmpty && csrf.isNotEmpty && cookieKuaishou.isNotEmpty && (!isCaptchaRequired || isAutoCaptcha))
     {
       await initiateUnfollowUploadingProcess();
     }
@@ -244,7 +266,7 @@ class   AppController extends GetxController {
             await verifyCaptcha();
             if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_FIRST_TIME)) {
               SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_FIRST_TIME, true);
-              bool result = await importUsersToHive(isSilent: true);
+              bool result = await importUsers(isSilent: true);
             }
             await startServicesIfUserAvailable();
             return;
@@ -298,13 +320,14 @@ class   AppController extends GetxController {
       isLoading.value = true;
     }
     streamTapeFolder = await fetchFolderList();
+    DateTime currentDateTime = DateTime.now();
+    String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
     String? selectedFolderSP = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER, defaultValue: "");
-    if (selectedFolderSP.isNotEmpty && !isDeleted) {
-      selectedFolder.value = streamTapeFolder!.folders!.where((e) => e.name ==  selectedFolderSP/*"Kwai 1 11 24"*/).first;
+    if (selectedFolderSP.isNotEmpty && !isDeleted && folderName == selectedFolderSP) {
+       selectedFolder.value = streamTapeFolder!.folders!.where((e) => e.name ==  selectedFolderSP/*"Kwai 1 11 24"*/).first;
     }
     else {
-      DateTime currentDateTime = DateTime.now();
-      String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
+
       StreamTapeFolderItem? currentStreamTapeFolder = streamTapeFolder!.folders!.where((e) => e.name ==  folderName).firstOrNull;
       if(currentStreamTapeFolder != null && !isDeleted)
         {
@@ -318,7 +341,6 @@ class   AppController extends GetxController {
           SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, selectedFolder.value.name!);
           SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, selectedFolder.value.id!);
         }
-
     }
     if (isResume) {
       isLoading.value = false;
@@ -425,7 +447,7 @@ class   AppController extends GetxController {
       subtitle: 'Are sure you want to delete it?',
       alertType: AlertType.delete,
       onConfirm: () async {
-        DialogUtils.showLoaderDialog(Get.context!, text: "Deleting......");
+        DialogUtils.showLoaderDialog(Get.context!, text: "Deleting......".obs);
         try {
           await deleteRemoteUploadingVideo(id);
         } catch (e) {
@@ -585,15 +607,38 @@ class   AppController extends GetxController {
     return finalFlvUrl;
   }
 
-  Future<(String,ApiErrorEnum)> getDirectKuaishouFlvUrlOrginal (String kuaishouLink,String did) async
+  Future<(String,ApiErrorEnum)> getDirectKuaishouFlvUrlOrginal(String kuaishouLink,String did,SocialUser socialUser,{bool isConcurrentProcess = false}) async
   {
     String finalFlvUrl = "";
     ApiErrorEnum error = ApiErrorEnum.NONE;
     try {
-      String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink);
+
+      String? orginalLink;
+      String referURL = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_USER_REFER_URL);
+      if(referURL.isEmpty || isUnfollowExceptionOccured)
+        {
+          try {
+            orginalLink = await WebUtils.getOriginalUrl(kuaishouLink,timeout: Duration(seconds: 25));
+            SharedPrefsUtil.setString(SharedPrefsUtil.KEY_UNFOLLOW_USER_REFER_URL, orginalLink!);
+            if (isConcurrentProcess && SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UNFOLLOW_UPLOAD_WITH_DELAY)) {
+              int mintoSeconds = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER) * 10;
+              await Future.delayed(Duration(seconds: getIntBetweenRange(30, mintoSeconds)));
+            }
+          } catch (e) {
+            print(e);
+          }
+        }
+      else
+        {
+          orginalLink = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_UNFOLLOW_USER_REFER_URL);
+        }
+
       Uri orginalUri = Uri.parse(orginalLink!);
-      String? eid = orginalUri.path.split("/").last;
-      String? efid = orginalUri.queryParameters["efid"];
+      List<String> updatedSegments = List.from(orginalUri.pathSegments);
+      updatedSegments[updatedSegments.length - 1] = socialUser.id!;
+      Uri updatedUri = orginalUri.replace(pathSegments: updatedSegments);
+      String? eid = updatedUri.path.split("/").last;
+      String? efid = updatedUri.queryParameters["efid"];
       var requestMap = {"efid":efid,"eid":eid,"source":6,"shareMethod":"card","clientType":"WEB_OUTSIDE_SHARE_H5"};
       int currentTimeInMillis = DateTime.now().millisecondsSinceEpoch;
       var headers = {"Referer":orginalLink,"Cookie":"${did}","Content-Type":"application/json"};
@@ -603,6 +648,7 @@ class   AppController extends GetxController {
       // "Host": orginalUri.origin,
       // "Referer": orginalLink,
       // "User-Agent": "HTTPie"};
+
       var headersHttpie = {
         'content-type': 'text/plain;charset=UTF-8',
         'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
@@ -611,15 +657,54 @@ class   AppController extends GetxController {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'x-pie-req-header-content-type': 'application/json',
         'x-pie-req-header-cookie': '${did}',
-        'x-pie-req-header-host': orginalUri.origin.replaceAll("https://", ""),
-        'x-pie-req-header-referer': orginalLink,
+        'x-pie-req-header-host': updatedUri.origin.replaceAll("https://", ""),
+        'x-pie-req-header-referer': updatedUri.toString(),
         'x-pie-req-header-user-agent': 'HTTPie',
         'x-pie-req-meta-follow-redirects': 'true',
         'x-pie-req-meta-method': 'POST',
         'x-pie-req-meta-ssl-verify': 'true',
-        'x-pie-req-meta-url': 'https://klsxvkqw.m.chenzhongtech.com/rest/k/live/byUser?kpn=NEBULA&kpf=UNKNOWN_PLATFORM&captchaToken=HEADCgp6dC5jYXB0Y2hhEtMCFJNAWpBNdfMfdnHcCLEyper4lASo9foKIFLNtFTVR_sF6Iafj4fRatV5JSV5JH0vjmIgk97FCjcpSJq42DGH4rdJ0ZllRH1hD-ny_EPyyyTjCURt-UqB8en6q8ll0K5TjY9K09l6_OkjyxX9CVFWkhY_--a9hm3Ay_Uf_iHLrn8_VcKfEHZmxnj7Oh--BoESFnHvVGxFn9TGLKKIozIdafTNtuFFtxY4__UrDLnZGYHQrA6CevqttA5WqE7YQvwXEz_Y7EtIIalOCFxtirZPgOiMQ425gw3XjZzDjQRwYdOge4sJO83maNTVsmX_sgBYETZxOuWmUhSglSGY67ygVPk6B1NwNLH3jesmph4VNGJM6rbi0yWbOtd2yLNWxr-HICvglWV4oDbrN-cczkrYCoYDyjTXRP62iK8x3wnuOrGKTXM_vEymib0kHp8AuGb35oj9GhJxat9v18_vGhz0w0fGzFHTlSooBTACTAIL'
+        'x-pie-req-meta-url': 'https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=UNKNOWN_PLATFORM&captchaToken='
       };
-      String response = await WebUtils.makePostRequest(HTTPIE_PROXY_URL, jsonEncode(requestMap),headers: headersHttpie);
+      var headers2 = {
+        'content-type': 'text/plain;charset=UTF-8',
+        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'x-pie-req-header-accept': '*/*',
+        'x-pie-req-header-accept-language': 'en-US,en;q=0.9,ur;q=0.8',
+        'x-pie-req-header-connection': 'keep-alive',
+        'x-pie-req-header-content-type': 'application/json',
+        'x-pie-req-header-cookie': did,
+        'x-pie-req-header-host': 'livev.m.chenzhongtech.com',
+        'x-pie-req-header-origin': 'https://livev.m.chenzhongtech.com',
+        'x-pie-req-header-referer': updatedUri.toString().replaceAll("klsxvkqw", "livev").replaceAll("klsg24an", "livev"),
+        'x-pie-req-header-sec-ch-ua': '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+        'x-pie-req-header-sec-ch-ua-mobile': '?0',
+        'x-pie-req-header-sec-ch-ua-platform': '"Windows"',
+        'x-pie-req-header-sec-fetch-dest': 'empty',
+        'x-pie-req-header-sec-fetch-mode': 'cors',
+        'x-pie-req-header-sec-fetch-site': 'same-origin',
+        'x-pie-req-header-user-agent': 'Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.114 Mobile Safari/537.36',
+        'x-pie-req-meta-follow-redirects': 'true',
+        'x-pie-req-meta-method': 'POST',
+        'x-pie-req-meta-ssl-verify': 'true',
+        'x-pie-req-meta-url': 'https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=UNKNOWN_PLATFORM&captchaToken=',
+        'Content-Type': 'text/plain'
+      };
+      if (isConcurrentProcess && SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UNFOLLOW_UPLOAD_WITH_DELAY)) {
+        int mintoSeconds = SharedPrefsUtil.getInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER) * 30;
+        await Future.delayed(Duration(seconds: getIntBetweenRange(10, mintoSeconds)));
+      }
+      String response = await WebUtils.makePostRequest(HTTPIE_PROXY_URL, jsonEncode(requestMap),headers: headers2,timeout: Duration(seconds: 25));
+      if(response.isEmpty)
+        {
+          isUnfollowExceptionOccured = true;
+        }
+      else
+        {
+          isUnfollowExceptionOccured = false;
+        }
       Map<String,dynamic> jsonResponse = json.decode(response);
       if (jsonResponse["result"] == 1) {
         finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"];
@@ -634,7 +719,7 @@ class   AppController extends GetxController {
         }
       else if (jsonResponse["result"] == 2214)
       {
-        error = ApiErrorEnum.OFFLINE;
+          error = ApiErrorEnum.OFFLINE;
       }
       else
         {
@@ -651,6 +736,71 @@ class   AppController extends GetxController {
               error = ApiErrorEnum.OTHERS;
             }
         }
+    } catch (e) {
+      error = ApiErrorEnum.EXCEPTION;
+    }
+    return (finalFlvUrl,error);
+
+  }
+
+
+  Future<(String,ApiErrorEnum)> getDirectKuaishouFlvUrlOrginalWithoutHttpie (String kuaishouLink,String did,{bool isConcurrent = false, int unfollowTime = 5}) async
+  {
+    String finalFlvUrl = "";
+    ApiErrorEnum error = ApiErrorEnum.NONE;
+    try {
+     if (isConcurrent) {
+       int mintoSeconds = unfollowTime * 60;
+       await Future.delayed(Duration(seconds: getIntBetweenRange(60, mintoSeconds)));
+     }
+      String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink,timeout: Duration(seconds: 15));
+      if (orginalLink!.isNotEmpty) {
+        Uri orginalUri = Uri.parse(orginalLink!);
+        String? eid =  orginalUri.path.split("/").last;
+        String? efid = orginalUri.queryParameters["efid"];
+        var requestMap = {"efid":efid,"eid":eid,"source":6,"shareMethod":"card","clientType":"WEB_OUTSIDE_SHARE_H5"};
+        int currentTimeInMillis = DateTime.now().millisecondsSinceEpoch;
+        var headers = {"Referer":orginalLink,"Cookie":"${did}","Content-Type":"application/json","Host": orginalUri.origin.replaceAll("https://", ""),"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
+        // var headers2 = {
+        // "Content-Type": "application/json",
+        // "Cookie": "did=$did",
+        // "Host": orginalUri.origin,
+        // "Referer": orginalLink,
+        // "User-Agent": "HTTPie"};
+        const String url = "https://livev.m.chenzhongtech.com/rest/k/live/byUser?kpn=GAME_ZONE&kpf=UNKNOWN_PLATFORM&captchaToken=";
+        String response = await WebUtils.makePostRequest(url, jsonEncode(requestMap),headers: headers,timeout: Duration(seconds: 15));
+        Map<String,dynamic> jsonResponse = json.decode(response);
+        if (jsonResponse["result"] == 1) {
+          finalFlvUrl = jsonResponse["liveStream"]["playUrls"][0]["url"];
+          if (jsonResponse["liveStreamEndReason"] != null) {
+            finalFlvUrl = "";
+            error = ApiErrorEnum.OFFLINE;
+          }
+        }
+        else if (jsonResponse["result"] == 2)
+        {
+          error = ApiErrorEnum.FREQUENT_REQUESTS;
+        }
+        else if (jsonResponse["result"] == 2214)
+        {
+          error = ApiErrorEnum.OFFLINE;
+        }
+        else
+        {
+          if(jsonResponse["result"] == 2001 && jsonResponse["captchaConfig"] != null)
+          {
+            error = ApiErrorEnum.CAPTCHA_REQUIRED;
+          }
+          else if (jsonResponse["result"] == 601)
+          {
+            error = ApiErrorEnum.LIVE_STREAM_OVER;
+          }
+          else
+          {
+            error = ApiErrorEnum.OTHERS;
+          }
+        }
+      }
     } catch (e) {
       error = ApiErrorEnum.EXCEPTION;
     }
@@ -788,7 +938,7 @@ class   AppController extends GetxController {
 
   Future<String> getUsernameFromKuaishouUrl(String kuaishouLink) async
   {
-    String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink);
+    String? orginalLink = await WebUtils.getOriginalUrl(kuaishouLink,timeout:Duration(seconds: 15) );
     Uri orginalUri = Uri.parse(orginalLink!);
     String? eid = orginalUri.path
         .split("/")
@@ -908,12 +1058,16 @@ class   AppController extends GetxController {
     }
   }
 
-  Future<bool> startUploading_background(String link, List<StreamtapeDownloadStatus> list,{bool isUnfollow = false}) async
+  Future<bool> startUploading_background(String link, List<StreamtapeDownloadStatus> list,{bool isUnfollow = false,bool isTiktok = false}) async
   {
     if (!isUrlExistsInDownlodingList(link, list, isBackground: true)) {
       if (isUnfollow) {
         addUnfollowUsername(link);
       }
+      else if(isTiktok)
+        {
+          addTiktokUsername(link);
+        }
       await remoteUploadStreamTape(link!, SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID), isBackGroundProcess: true);
       await Future.delayed(Duration(seconds: getIntBetweenRange(1, 3)));
       return true;
@@ -985,11 +1139,13 @@ class   AppController extends GetxController {
             }
           }
           bool isUnfollowUser = isUrlExistInUnfollowUserListBox(item["url"]);
+          bool isTiktokUser = await isUrlExistInTiktokUserListBox(item["url"]);
           downloadingList.add(StreamtapeDownloadStatus(status: item["status"],
               url: item["url"],
               imageBytes: bytes,
               id: item["id"],
               isUnfollowUser: isUnfollowUser,
+              isTiktokUser: isTiktokUser,
               isThumbnailUpdating: false.obs));
 
           this.update(["updateDownloadingList"]);
@@ -1031,11 +1187,13 @@ class   AppController extends GetxController {
               }
             }
             bool isUnfollowUser = isUrlExistInUnfollowUserListBox(item["url"]);
+            bool isTiktokUser = await isUrlExistInTiktokUserListBox(item["url"]);
             downloadingList.add(StreamtapeDownloadStatus(status: item["status"],
                 url: item["url"],
                 imageBytes: bytes,
                 id: item["id"],
                 isUnfollowUser: isUnfollowUser,
+                isTiktokUser: isTiktokUser,
                 isThumbnailUpdating: false.obs));
 
             this.update(["updateDownloadingList"]);
@@ -1217,7 +1375,7 @@ class   AppController extends GetxController {
     showModalBottomSheet(
         context: contxt,
         builder: (context) {
-          return SingleChildScrollView(child: Text(value),);
+          return SingleChildScrollView(child: txt.Text(value),);
         }
     );
   }
@@ -1255,11 +1413,13 @@ class   AppController extends GetxController {
       print(e);
     }
     bool isUnfollowUser = isUrlExistInUnfollowUserListBox(item["url"]);
+    bool isTiktokUser = await isUrlExistInTiktokUserListBox(item["url"]);
     return StreamtapeDownloadStatus(status: item["status"],
         url: item["url"],
         imageBytes: bytes,
         id: item["id"],
         isUnfollowUser: isUnfollowUser,
+        isTiktokUser: isTiktokUser,
         isThumbnailUpdating: false.obs);
   }
 
@@ -1339,21 +1499,29 @@ class   AppController extends GetxController {
     return input.substring(0, index);
   }
 
-  getDownloadLinks(String id) async
+  getDownloadLinks(String id,{bool showLoader  = true}) async
   {
-    isSearching = false;
-    DialogUtils.showLoaderDialog(Get.context!);
-    downloadLinks.value = "";
-    downloadLinksList = [];
-    StringBuffer stringBuffer = StringBuffer("");
-    StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
-    for (StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!) {
-      downloadLinksList.add(DownloadItem(streamtapeFileItem.name, "Press Download icon to get link....", "", streamtapeFileItem.link!, false.obs, false.obs,Uint8List.fromList([]),false,convertBytes(streamtapeFileItem.size!)));
-      //stringBuffer.write(mp4ImageUrl.$1! +"\n\n");
-      //downloadLinks.value = stringBuffer.toString();
-      this.update(["updateStreamtapeDownloadingList"]);
+    try {
+      isSearching = false;
+      if (showLoader) {
+        DialogUtils.showLoaderDialog(Get.context!);
+      }
+      downloadLinks.value = "";
+      downloadLinksList = [];
+      StringBuffer stringBuffer = StringBuffer("");
+      StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
+      for (StreamtapeFileItem streamtapeFileItem in streamTapeFolder.files!) {
+         downloadLinksList.add(DownloadItem(streamtapeFileItem.name, "Press Download icon to get link....", "", streamtapeFileItem.link!, false.obs, false.obs,Uint8List.fromList([]),false,convertBytes(streamtapeFileItem.size!)));
+         //stringBuffer.write(mp4ImageUrl.$1! +"\n\n");
+         //downloadLinks.value = stringBuffer.toString();
+         this.update(["updateStreamtapeDownloadingList"]);
+          }
+    } catch (e) {
+      print(e);
     }
-    DialogUtils.stopLoaderDialog();
+    if (showLoader) {
+      DialogUtils.stopLoaderDialog();
+    }
   }
 
 
@@ -1470,12 +1638,12 @@ class   AppController extends GetxController {
     return String.fromCharCodes(List.generate(len, (index) => r.nextInt(33) + 89));
   }
 
-  List<UserKuaishou> getAllUserList() {
+  List<SocialUser> getAllUserList() {
     final allKeys = usernameListIdBox.keys;
-    List<UserKuaishou> list = [];
+    List<SocialUser> list = [];
     // Iterate over all keys and delete those not in keysToKeep
     for (var key in allKeys) {
-      list.add(UserKuaishou(id: key, value: usernameListIdBox.get(key)));
+      list.add(SocialUser(id: key, value: usernameListIdBox.get(key)));
     }
 
     return list;
@@ -1534,6 +1702,30 @@ class   AppController extends GetxController {
   bool isUrlExistInUnfollowUserListBox(String url)
   {
     return unfollowUserUrlListBox.values.toList().any((value) => value.toString().contains(url));
+  }
+
+  Future addTiktokUsername(String url) async
+  {
+    if(tiktokUserUrlListBox == null)
+      {
+        tiktokUserUrlListBox = await Hive.openBox("tiktokUserUrlListBox");
+      }
+    Uri currentUri = Uri.parse(url);
+    String currentUrl = currentUri.origin + currentUri.path;
+    if (!tiktokUserUrlListBox!.values.toList().any((value) => value.toString().contains(currentUrl))) {
+      await tiktokUserUrlListBox!.put(generateRandomString(10), currentUrl);
+    }
+  }
+
+  Future<bool> isUrlExistInTiktokUserListBox(String url) async
+  {
+    if(tiktokUserUrlListBox == null)
+    {
+      tiktokUserUrlListBox = await Hive.openBox("tiktokUserUrlListBox");
+    }
+    Uri currentUri = Uri.parse(url);
+    String currentUrl = currentUri.origin + currentUri.path;
+    return tiktokUserUrlListBox!.values.toList().any((value) => value.toString().contains(currentUrl));
   }
 
   Future<List<StreamtapeDownloadStatus>> getRemoteDownloadingStatus_background() async
@@ -1716,15 +1908,15 @@ class   AppController extends GetxController {
         stopwatch.onStopTimer();
       }
     unfollowUserStopwatch = [];
-    List<UserKuaishou> list = getAllUserList();
-    List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+    List<SocialUser> list = getAllUserList();
+    List<SocialUser> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
     await setFolderIfNotSet();
     if (listFiltered.length > 0) {
       int totalMin = getUnfollowMin(listFiltered);
       SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,totalMin);
       unfollowCurrentTime.value = totalMin;
       unfollowUserTimer = makePeriodicTimer(Duration(minutes: totalMin),fireNow: true,isCustomTimer: true,isUnfollowTimer: true,(timer) async {
-
+        await verifyCaptcha(isAutoCaptchaVerification: SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_AUTO_UNFOLLOW_USER_CAPTCHA_VERIFICATION,defaultValue: true));
         listFiltered = getAllUserList().where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
         final stopWatchTimer = StopWatchTimer(
             mode: StopWatchMode.countDown,
@@ -1748,13 +1940,13 @@ class   AppController extends GetxController {
         unfollowLiveStreamOver.value = 0;
         totalUnfollowUserUploadedProgress.value = "0/${listFiltered.length}";
 
-        for (UserKuaishou userKuaishou in listFiltered) {
+        for (SocialUser userKuaishou in listFiltered) {
             try {
               String initialUrl = "https://v.kuaishou.com${userKuaishou.value!.replaceAll("<||>UNFOLLOW", "")}";
               String cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
               bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
               if (cookie.isNotEmpty && !isCaptchaRequired) {
-                (String,ApiErrorEnum) urlError = await getDirectKuaishouFlvUrlOrginal(initialUrl,cookie);
+                (String,ApiErrorEnum) urlError = await getDirectKuaishouFlvUrlOrginal(initialUrl,cookie,userKuaishou);
                 if (urlError.$2 == ApiErrorEnum.NONE) {
                   if (urlError.$1.isNotEmpty) {
                      unfollowUserOnline.value  = unfollowUserOnline.value + 1;
@@ -1813,13 +2005,13 @@ class   AppController extends GetxController {
   {
     if (SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING,defaultValue: false)) {
       if(isConcurrentUnfollowUploadingEnable.value)
-            {
-              await initiateUnfollowUploadingProcessConcurrent();
-            }
-          else
-            {
-              await initiateUnfollowUploadingProcessSequence();
-            }
+        {
+          await initiateUnfollowUploadingProcessConcurrent();
+        }
+      else
+        {
+          await initiateUnfollowUploadingProcessSequence();
+        }
     }
   }
   Future initiateUnfollowUploadingProcessConcurrent () async
@@ -1834,15 +2026,15 @@ class   AppController extends GetxController {
       stopwatch.onStopTimer();
     }
     unfollowUserStopwatch = [];
-    List<UserKuaishou> list = getAllUserList();
-    List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+    List<SocialUser> list = getAllUserList();
+    List<SocialUser> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
     await setFolderIfNotSet();
     if (listFiltered.length > 0) {
       int totalMin = getUnfollowMin(listFiltered);
       SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN,totalMin);
       unfollowCurrentTime.value = totalMin;
       unfollowUserTimer = makePeriodicTimer(Duration(minutes: totalMin),fireNow: true,isCustomTimer: true,isUnfollowTimer: true,(timer) async {
-
+        await verifyCaptcha(isAutoCaptchaVerification: SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_AUTO_UNFOLLOW_USER_CAPTCHA_VERIFICATION,defaultValue: true));
         listFiltered = getAllUserList().where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
         final stopWatchTimer = StopWatchTimer(
             mode: StopWatchMode.countDown,
@@ -1872,10 +2064,11 @@ class   AppController extends GetxController {
             String cookie = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE);
             bool isCaptchaRequired = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED);
             if (cookie.isNotEmpty && !isCaptchaRequired) {
-              for (UserKuaishou userKuaishou in listFiltered) {
+              for (SocialUser userKuaishou in listFiltered) {
                 String initialUrl = "https://v.kuaishou.com${userKuaishou.value!.replaceAll("<||>UNFOLLOW", "")}";
-                futureFlvUrlList.add(getDirectKuaishouFlvUrlOrginal(initialUrl,cookie));
+                futureFlvUrlList.add(getDirectKuaishouFlvUrlOrginal(initialUrl,cookie,userKuaishou,isConcurrentProcess: true));
               }
+
               List<(String,ApiErrorEnum)> futureFlvUrlListResult = await Future.wait(futureFlvUrlList);
 
               for(int i = 0;i<futureFlvUrlListResult.length;i++)
@@ -1934,22 +2127,22 @@ class   AppController extends GetxController {
   }
 
 
-  Future<void> createFolderOnNextDay() async
+  Future<void> createFolderForCurrentDayIfNotExists() async
   {
     DateTime currentDateTime = DateTime.now();
-     if(currentDateTime.hour == 0)
-       {
-        String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
-        StreamTapeFolder streamTapeFolder = await fetchFolderList(isBackground: true);
-        bool isFolderExist = streamTapeFolder.folders!.any((folder)=> folder.name == folderName);
-        if(!isFolderExist)
-          {(bool,String) statusId = await createFolder(folderName,isBackground: true);
-          if (statusId.$1) {
-            SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED, true);
-            SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, folderName);
-            SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, statusId.$2);
-          }}
-      }
+    String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
+    if(SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER) != folderName)
+      {
+       StreamTapeFolder streamTapeFolder = await fetchFolderList(isBackground: true);
+       bool isFolderExist = streamTapeFolder.folders!.any((folder)=> folder.name == folderName);
+       if(!isFolderExist)
+         {(bool,String) statusId = await createFolder(folderName,isBackground: true);
+         if (statusId.$1) {
+           SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_NEW_FOLDER_CREATED, true);
+           SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER, folderName);
+           SharedPrefsUtil.setString(SharedPrefsUtil.KEY_SELECTED_FOLDER_ID, statusId.$2);
+         }}
+     }
   }
 
   bool isStreamTapeDownloadUrlLoaded (DownloadItem downloadItem)
@@ -1957,34 +2150,49 @@ class   AppController extends GetxController {
     return downloadItem!.downloadUrl != null && downloadItem!.downloadUrl != "Press Download icon to get link...."  && downloadItem!.downloadUrl != "Unable to get download url....";
   }
 
-  Future<void> saveListToFile({bool isSilent = false}) async {
+  Future<void> exportUsers({bool isSilent = false,bool isGist = false}) async {
     // Request storage permission
     if (!isSilent) {
-      DialogUtils.showLoaderDialog(Get.context!, text: "Exporting....");
+      DialogUtils.showLoaderDialog(Get.context!, text: "Exporting....".obs);
     }
-    //if (permissionStatus.isGranted) {
-    // Get the download directory
-    List<String> _exPath = await ExternalPath.getExternalStorageDirectories();
-    final downloadDirectory = Directory('${_exPath[0]}/kuaishou_data');
-    if (!await downloadDirectory.exists()) {
-      await downloadDirectory.create(recursive: true);
-    }
-
-    // Prepare the text file
-    final filePath = '${downloadDirectory.path}/users.txt';
-    final file = File(filePath);
 
     List<String> userList = getAllUsersListString();
-    // Join list items into a single string with line breaks
-    String fileContent = userList.join('\n');
+    //if (permissionStatus.isGranted) {
+    // Get the download directory
+    if (!isGist) {
+      List<String>? _exPath = await ExternalPath.getExternalStorageDirectories();
+      final downloadDirectory = Directory('${_exPath![0]}/kuaishou_data');
+      if (!await downloadDirectory.exists()) {
+            await downloadDirectory.create(recursive: true);
+          }
 
-    // Write to file
-    await file.writeAsString(fileContent);
+      // Prepare the text file
+      final filePath = '${downloadDirectory.path}/users.txt';
+      final file = File(filePath);
+
+
+      // Join list items into a single string with line breaks
+      String fileContent = userList.join('\n');
+
+      // Write to file
+      await file.writeAsString(fileContent);
+      if (!isSilent) {
+        ScaffoldMessenger.of(Get.context!).showSnackBar(
+            SnackBar(content: txt.Text('File saved to $filePath')));}
+    } else {
+      (bool,String) gistItem = await GistService.doesFileExist();
+
+      if (gistItem.$1) {
+        // Update existing file
+        await GistService.updateGist(gistItem.$2, userList.join('\n'));
+      } else {
+        // Create new file
+        await GistService.createGist(userList.join('\n'));
+      }
+    }
 
     // Notify the user that the file is saved
     if (!isSilent) {
-      ScaffoldMessenger.of(Get.context!).showSnackBar(
-              SnackBar(content: Text('File saved to $filePath')));
       // } else {
       //   // Handle permission denied
       //   ScaffoldMessenger.of(Get.context!).showSnackBar(SnackBar(content: Text('Storage permission denied')));
@@ -1993,47 +2201,66 @@ class   AppController extends GetxController {
     }
   }
 
-  Future<bool> importUsersToHive({bool isSilent = false}) async {
+  Future<bool> importUsers({bool isSilent = false, bool isGist = false}) async {
     List<String> lines = [];
     bool isUserAvailable = true;
+    RxString txt = "".obs;
+    int importedSuccessfully = 0;
     if (!isSilent) {
-      DialogUtils.showLoaderDialog(Get.context!, text: "Importing....");
+      DialogUtils.showLoaderDialog(Get.context!, text: txt,title: "Importing");
     }
-    try {
-      // Get the application documents directory
+    if (!isGist) {
+      try {
+            // Get the application documents directory
+            List<String>? _exPath = await ExternalPath.getExternalStorageDirectories();
+            final downloadDirectory = Directory('${_exPath![0]}/kuaishou_data');
+            String filePath = '${downloadDirectory.path}/users.txt';
 
-      List<String> _exPath = await ExternalPath.getExternalStorageDirectories();
-      final downloadDirectory = Directory('${_exPath[0]}/kuaishou_data');
-      String filePath = '${downloadDirectory.path}/users.txt';
-
-      // Reading the file
-      File file = File(filePath);
-      if (await file.exists()) {
-        lines = await file.readAsLines();
+            // Reading the file
+            File file = File(filePath);
+            if (await file.exists()) {
+              lines = await file.readAsLines();
+            }
+            else {
+              if (!isSilent) {
+                showToast("Unable to find file....");
+              }
+              isUserAvailable =  false;
+            }
+          } catch (e) {
+            print('Error reading file: $e');
+          }
+    } else {
+      (bool,String) gistItem = await GistService.doesFileExist();
+      if (gistItem.$1) {
+        String content = await GistService.getGist(gistItem.$2);
+        lines = content.split("\n");
       }
-      else {
-        if (!isSilent) {
-          showToast("Unable to find file....");
-        }
-        isUserAvailable =  false;
-      }
-    } catch (e) {
-      print('Error reading file: $e');
     }
 
     if(lines.length > 0)
       {
         for(String username in lines)
           {
+            txt.value = "(${lines.indexOf(username) + 1}/${lines.length + 1}) $username\n✅ $importedSuccessfully/${lines.indexOf(username) + 1}";
             if(username.contains("<||>UNFOLLOW"))
               {
-                String initialUrl = "https://v.kuaishou.com${username.replaceAll("<||>UNFOLLOW", "")}";
-                String usernamefinal = await getUsernameFromKuaishouUrl(initialUrl);
-                await addUsername(username,isImport: true,unfollowUserName: usernamefinal);
+                try {
+                  String initialUrl = "https://v.kuaishou.com${username.replaceAll("<||>UNFOLLOW", "")}";
+                  if (!usernameListIdBox.values.toList().any((value) => value.toString().contains(username))) {
+                    String usernamefinal = await getUsernameFromKuaishouUrl(initialUrl);
+                    await addUsername(username,isImport: true,unfollowUserName: usernamefinal);
+                    await Future.delayed(Duration(seconds: 6));
+                  }
+                  importedSuccessfully++;
+                } catch (e) {
+                  print(e);
+                }
               }
             else
               {
                 await addUsername(username,isImport: true);
+                importedSuccessfully++;
               }
 
           }
@@ -2049,25 +2276,124 @@ class   AppController extends GetxController {
     return isUserAvailable;
   }
 
- Future verifyCaptcha({bool isRefresh = false,bool isForced = false}) async
+ Future verifyCaptcha({bool isRefresh = false,bool isForced = false,bool isAutoCaptchaVerification = false}) async
   {
-    if((SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty) || isForced)
-    {
-      List<UserKuaishou> list = getAllUserList();
-      List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
-      var randomU = listFiltered[Random().nextInt(listFiltered.length)];
-      String finalUrl = "https://v.kuaishou.com${randomU.value!.replaceAll("<||>UNFOLLOW", "")}";
-      WebViewUtils webViewUtils = WebViewUtils();
-      await webViewUtils.showWebViewDialog(finalUrl, ".flv");
-      if (isRefresh) {
-        await initiateUnfollowUploadingProcess();
+    if((SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED) || SharedPrefsUtil.getString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE).isEmpty) || isForced) {
+      try {
+        if (!AppController.isVerifyCaptchaShowing) {
+          String finalUrl = "";
+          final u = RandomUserAgents((value) {
+            return value.contains("Android");
+          });
+          if(SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_RANDOM_CAPTCHA_USER,defaultValue: false))
+            {
+              finalUrl = await getRandomLiveUserUrl();
+            }
+          else
+            {
+              //finalUrl = "https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888";
+              // finalUrl = "https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_wxms&followRefer=151&shareMethod=CARD&kpn=GAME_ZONE&subBiz=LIVE_STEARM_OUTSIDE&shareId=18392501704090&shareToken=Xa2U4HcNGpFUOAR&shareMode=APP&efid=0&originShareId=18392501704090&shareObjectId=24561342&shareUrlOpened=0&timestamp=1747029341442";
+              finalUrl = "https://live.kuaishou.com/u/cyl51666888";
+              DialogUtils.showLoaderDialog(Get.context!,text: "Loading....".obs);
+              finalUrl = (await WebUtils.getOriginalUrl(finalUrl,headers: {"User-Agent" : u.getUserAgent()},timeout: Duration(seconds: 15)))!;
+              DialogUtils.stopLoaderDialog();
+            }
+          //String captchaUrl = "https://captcha.zt.kuaishou.com/mobile/h5/redirect/index.html?type=1&url=https%3A%2F%2Fcaptcha.zt.kuaishou.com%2Frest%2Fzt%2Fcaptcha%2Fsliding%2Fconfig&jsSdkUrl=https%3A%2F%2Fali2.a.yximgs.com%2Fstatic%2Fcaptcha%2Fsdk%2FkwaiCaptcha.bffe9a4c.umd.min.js&bizName=DEFAULT&redirectUrl=https%3A%2F%2Fklsxvkqw.m.chenzhongtech.com%2Ffw%2Flive%2Fliazi222222%3Fcc%3Dshare_copylink%26followRefer%3D151%26shareMethod%3DTOKEN%26docId%3D5%26kpn%3DNEBULA%26subBiz%3DLIVE_STREAM%26shareId%3D18185139182876%26shareToken%3DX-8cZHQLZoPy92ai%26shareResourceType%3DLIVESTREAM_OTHER%26userId%3D2604786046%26shareType%3D5%26et%3D1_a%252F2004058953446378738_combsearchuser%26shareMode%3DAPP%26efid%3D0%26originShareId%3D18185139182876%26appType%3D21%26shareObjectId%3D2zJLPgunQeI%26shareUrlOpened%3D0%26timestamp%3D1733831547065&redirectType=replace&passDataParamsType=search";
+          //await CookieManager.instance().deleteCookies(url: WebUri("https://klsxvkqw.m.chenzhongtech.com"));
+          // String? userAgentListResponse = await WebUtils.makeGetRequest(USER_AGENT_LIST_URL);
+          // List<String> userAgentList = userAgentListResponse!.split("\n");
+
+          // final listUserAgent =  [
+          //   "Mozilla/5.0 (Linux; U; Android 8.1.0; zh-cn; BLA-AL00 Build/HUAWEIBLA-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.132 MQQBrowser/8.9 Mobile Safari/537.36",
+          //   "Mozilla/5.0 (Linux; Android 8.1; PAR-AL00 Build/HUAWEIPAR-AL00; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.132 MQQBrowser/6.2 TBS/044304 Mobile Safari/537.36 MicroMessenger/6.7.3.1360(0x26070333) NetType/WIFI Language/zh_CN Process/tools",
+          //   "Mozilla/5.0 (Linux; Android 8.1.0; ALP-AL00 Build/HUAWEIALP-AL00; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/63.0.3239.83 Mobile Safari/537.36 T7/10.13 baiduboxapp/10.13.0.11 (Baidu; P1 8.1.0)",
+          //   "Mozilla/5.0 (Linux; Android 6.0.1; OPPO A57 Build/MMB29M; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/63.0.3239.83 Mobile Safari/537.36 T7/10.13 baiduboxapp/10.13.0.10 (Baidu; P1 6.0.1)",
+          //   "Mozilla/5.0 (Linux; Android 8.1; EML-AL00 Build/HUAWEIEML-AL00; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/53.0.2785.143 Crosswalk/24.53.595.0 XWEB/358 MMWEBSDK/23 Mobile Safari/537.36 MicroMessenger/6.7.2.1340(0x2607023A) NetType/4G Language/zh_CN",
+          //   "Mozilla/5.0 (Linux; Android 8.0; DUK-AL20 Build/HUAWEIDUK-AL20; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.132 MQQBrowser/6.2 TBS/044353 Mobile Safari/537.36 MicroMessenger/6.7.3.1360(0x26070333) NetType/WIFI Language/zh_CN Process/tools",
+          //   "Mozilla/5.0 (Linux; U; Android 8.0.0; zh-CN; MHA-AL00 Build/HUAWEIMHA-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 UCBrowser/12.1.4.994 Mobile Safari/537.36",
+          //   "Mozilla/5.0 (Linux; Android 8.0; MHA-AL00 Build/HUAWEIMHA-AL00; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.132 MQQBrowser/6.2 TBS/044304 Mobile Safari/537.36 MicroMessenger/6.7.3.1360(0x26070333) NetType/NON_NETWORK Language/zh_CN Process/tools",
+          //   "Mozilla/5.0 (Linux; U; Android 8.0.0; zh-CN; MHA-AL00 Build/HUAWEIMHA-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/40.0.2214.89 UCBrowser/11.6.4.950 UWS/2.11.1.50 Mobile Safari/537.36 AliApp(DingTalk/4.5.8) com.alibaba.android.rimet/10380049 Channel/227200 language/zh-CN",
+          //   "Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; EML-AL00 Build/HUAWEIEML-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 UCBrowser/11.9.4.974 UWS/2.13.1.48 Mobile Safari/537.36 AliApp(DingTalk/4.5.11) com.alibaba.android.rimet/10487439 Channel/227200 language/zh-CN",
+          //   "Mozilla/5.0 (Linux; U; Android 4.1.2; zh-cn; HUAWEI MT1-U06 Build/HuaweiMT1-U06) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30 baiduboxapp/042_2.7.3_diordna_8021_027/IEWAUH_61_2.1.4_60U-1TM+IEWAUH/7300001a/91E050E40679F078E51FD06CD5BF0A43%7C544176010472968/1",
+          //   "Mozilla/5.0 (Linux; Android 8.0; MHA-AL00 Build/HUAWEIMHA-AL00; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.132 MQQBrowser/6.2 TBS/044304 Mobile Safari/537.36 MicroMessenger/6.7.3.1360(0x26070333) NetType/4G Language/zh_CN Process/tools",
+          //   "Mozilla/5.0 (Linux; U; Android 8.0.0; zh-CN; BAC-AL00 Build/HUAWEIBAC-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 UCBrowser/11.9.4.974 UWS/2.13.1.48 Mobile Safari/537.36 AliApp(DingTalk/4.5.11) com.alibaba.android.rimet/10487439 Channel/227200 language/zh-CN",
+          //   "Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; BLA-AL00 Build/HUAWEIBLA-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 UCBrowser/11.9.4.974 UWS/2.13.1.48 Mobile Safari/537.36 AliApp(DingTalk/4.5.11) com.alibaba.android.rimet/10487439 Channel/227200 language/zh-CN",
+          //   "Mozilla/5.0 (Linux; Android 5.1.1; vivo X6S A Build/LMY47V; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.132 MQQBrowser/6.2 TBS/044207 Mobile Safari/537.36 MicroMessenger/6.7.3.1340(0x26070332) NetType/4G Language/zh_CN Process/tools",
+          // ];
+
+          // String finalUserAgent = listUserAgent[getIntBetweenRange(0, listUserAgent.length)];
+
+          if(finalUrl.isEmpty)
+            {
+              showToast("Unable to get link....");
+              return;
+            }
+          WebViewUtils webViewUtils = WebViewUtils();
+          bool isCaptcha = await webViewUtils.showWebViewDialog(finalUrl, ".flv",/*userAgent: u.getUserAgent(),*/isAuto : isAutoCaptchaVerification,incognito: true,/*header: {"User-Agent":u.getUserAgent()}*/);
+          if (!isCaptcha && isAutoCaptchaVerification)
+             {
+               var result = await webViewUtils.inAppWebViewController2.evaluateJavascript(source: "document.cookie");
+               String cookie = result.toString().split(";").where((cookie)=>cookie.contains("did")).first;
+               SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, cookie);
+               SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
+               Get.back();
+             }
+           else if (isCaptcha && isAutoCaptchaVerification)
+             {
+               await saveCaptchaUsersToFile(finalUrl);
+               Get.back();
+             }
+             if (isRefresh)
+             {
+               await initiateUnfollowUploadingProcess();
+             }
+        }
+      } catch (e) {
+        print(e);
       }
     }
   }
 
+
+  Future<String> getRandomUserUrl () async {
+    String finalUrl = "";
+    String? captchUser = await getCaptchaUser();
+    if (captchUser!.isNotEmpty) {
+      finalUrl = captchUser;
+    }
+    else
+      {
+        List<SocialUser> list = getAllUserList();
+        List<SocialUser> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+        var randomU = listFiltered[Random().nextInt(listFiltered.length)];
+        finalUrl = "https://v.kuaishou.com${randomU.value!.replaceAll("<||>UNFOLLOW", "")}";
+      }
+
+
+    return finalUrl;
+  }
+
+  Future<String> getRandomUserUrl2 () async {
+    String finalUrl = "";
+    List<SocialUser> list = getAllUserList();
+    List<SocialUser> listFiltered = list.where((user)=>!user.value!.contains("<||>UNFOLLOW")).toList();
+    var randomU = listFiltered[Random().nextInt(listFiltered.length)];
+    finalUrl = "https://live.kuaishou.com/u/${randomU.value}";
+
+    return finalUrl;
+  }
+
+  Future<String> getRandomLiveUserUrl () async {
+    String finalUrl = "";
+    List<String> list = kuaishouLiveUserListBox!.get("live_user_id_list").cast<String>();
+    var randomU = list[Random().nextInt(list.length)];
+    finalUrl = "https://live.kuaishou.com/u/${randomU}";
+
+    return finalUrl;
+  }
   Future startServicesIfUserAvailable() async
   {
-    List<UserKuaishou> list = getAllUserList();
+    List<SocialUser> list = getAllUserList();
     if(list.length > 0)
     {
       await restartBackgroundService();
@@ -2106,7 +2432,6 @@ class   AppController extends GetxController {
 
   deleteDuplicateFiles(String id) async
   {
-    DialogUtils.showLoaderDialog(Get.context!,text: "Deleting duplicated files......");
     try {
       StreamTapeFolder streamTapeFolder = await getFolderFiles(id);
 
@@ -2153,8 +2478,6 @@ class   AppController extends GetxController {
     } catch (e) {
       print(e);
     }
-
-    DialogUtils.stopLoaderDialog();
 
   }
 
@@ -2206,7 +2529,7 @@ class   AppController extends GetxController {
 
   Future<void> cloneStreamTapeFolder () async
   {
-    DialogUtils.showLoaderDialog(Get.context!,text: "Cloning.....");
+    DialogUtils.showLoaderDialog(Get.context!,text: "Cloning.....".obs);
     DateTime dateTimeNow = DateTime.now();
     DateTime dateTimeBeforeMonth = dateTimeNow.subtract(Duration(days: 30));
     StreamTapeFolder streamTapeFolder = await fetchFolderList();
@@ -2346,5 +2669,207 @@ class   AppController extends GetxController {
       Get.back();
     //}
   }
+
+  Future<void> saveCaptchaUsersToFile(String url) async {
+    // Request storage permission if needed
+
+    List<String>? _exPath = await ExternalPath.getExternalStorageDirectories();
+    final downloadDirectory = Directory('${_exPath![0]}/kuaishou_data');
+    if (!await downloadDirectory.exists()) {
+      await downloadDirectory.create(recursive: true);
+    }
+
+    final filePath = '${downloadDirectory.path}/captchausers.txt';
+    final file = File(filePath);
+
+    // Read file if it exists
+    if (await file.exists()) {
+      final existingContent = await file.readAsLines();
+      if (existingContent.contains(url)) {
+        print('URL already exists in file.');
+        return; // Exit early if URL already exists
+      }
+    }
+
+    // Write to file
+    await file.writeAsString("$url\n", mode: FileMode.append);
+    print('URL added to file.');
+  }
+
+  Future<String?> getCaptchaUser() async
+  {
+    String? user = "";
+    try {
+      List<String> lines = [];
+      List<String>? _exPath = await ExternalPath.getExternalStorageDirectories();
+      final downloadDirectory = Directory('${_exPath![0]}/kuaishou_data');
+      String filePath = '${downloadDirectory.path}/captchausers.txt';
+
+      // Reading the file
+      File file = File(filePath);
+      if (await file.exists()) {
+            lines = await file.readAsLines();
+          }
+      if (lines.length > 0) {
+        user = lines[getIntBetweenRange(0, lines.length)];
+      } else {
+        user = "";
+      }
+    } catch (e) {
+      print(e);
+      return user;
+    }
+    return user;
+
+  }
+
+  var tiktokHeader = {
+    "Sec-Ch-Ua": "\"Not/A)Brand\";v=\"8\", \"Chromium\";v=\"126\"",
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": "\"Linux\"",
+    "Accept-Language": "en-US",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.127 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-User": "?1",
+    "Sec-Fetch-Dest": "document",
+    "Priority": "u=0, i",
+    "Referer": "https://www.tiktok.com/"};
+
+  Future<String> getRoomIdFromUser(String user) async {
+
+    // final response = await httpClient.get(
+    //   Uri.parse('https://www.tiktok.com/@$user/live'),
+    //   headers: {
+    //     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    //   },
+    // );
+
+
+
+    String proxyUrl = "https://www.tiktok.com/@$user/live";
+
+    final content = await WebUtils.makeGetRequest(proxyUrl,headers: tiktokHeader);
+
+    if (content!.contains('Please wait...')) {
+      return "";
+    }
+
+    final regex = RegExp(
+      r'<script id="SIGI_STATE" type="application/json">(.*?)</script>',
+      dotAll: true,
+    );
+    final match = regex.firstMatch(content);
+
+    if (match == null) {
+      return "";
+    }
+
+    final jsonData = json.decode(match.group(1)!);
+
+    if (!jsonData.containsKey('LiveRoom') && jsonData.containsKey('CurrentRoom')) {
+      return "";
+    }
+
+    final roomId = jsonData['LiveRoom']?['liveRoomUserInfo']?['user']?['roomId'];
+
+    if (roomId == null) {
+      return "";
+    }
+
+    return roomId.toString();
+  }
+
+
+  Future<String> getLiveUrl(String roomId) async {
+    if (roomId.isEmpty){return "";}
+
+    final jsonResponse = await WebUtils.makeGetRequest("https://webcast.tiktok.com/webcast/room/info/?aid=1988&room_id=$roomId",headers: tiktokHeader);
+
+    final data = json.decode(jsonResponse!);
+
+    if (jsonResponse.contains('This account is private')) {
+      return "";
+    }
+
+    final streamUrl = data['data']?['stream_url'] ?? {};
+
+    // TODO: Implement m3u8 support if needed later
+    String? liveUrlFlv = streamUrl['flv_pull_url']?['FULL_HD1'] ??
+        streamUrl['flv_pull_url']?['HD1'] ??
+        streamUrl['flv_pull_url']?['SD2'] ??
+        streamUrl['flv_pull_url']?['SD1'];
+
+    // If no FLV URL found, fallback to RTMP
+    liveUrlFlv ??= streamUrl['rtmp_pull_url'];
+
+    if (liveUrlFlv == null && data['status_code'] == 4003110) {
+      return "";
+    }
+
+    print('LIVE URL: $liveUrlFlv\n'); // Equivalent to logger.info
+
+    return liveUrlFlv ?? '';
+  }
+
+  Future<List<TiktokUser>> getTiktokLiveUserList() async
+  {
+    List<TiktokUser> usersList = [];
+    final Map<String, String> headers = {
+      'sec-ch-ua': '"Microsoft Edge";v="135", "Not-A.Brand";v="8", "Chromium";v="135"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-origin',
+      'sentry-trace': '9cec17990f854628926e19280736460e-839f81e984c198db-1',
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0',
+      'x-pie-req-header-accept-encoding': 'gzip, deflate, br, zstd',
+      'x-pie-req-header-accept-language': 'en-US,en;q=0.9,ur;q=0.8',
+      'x-pie-req-header-cookie': 'sessionid_ss=6dc7e832d898854e8cffb825014c926d',
+      'x-pie-req-header-host': 'webcast.tiktok.com',
+      'x-pie-req-header-origin': 'https://www.tiktok.com',
+      'x-pie-req-header-referer': 'https://www.tiktok.com',
+      'x-pie-req-header-sec-ch-ua': '"Google Chrome";v="135", "Not-A.Brand";v="8", "Chromium";v="135"',
+      'x-pie-req-header-sec-ch-ua-mobile': '?0',
+      'x-pie-req-header-sec-ch-ua-platform': '"Windows"',
+      'x-pie-req-header-sec-fetch-dest': 'empty',
+      'x-pie-req-header-sec-fetch-mode': 'cors',
+      'x-pie-req-header-sec-fetch-site': 'same-site',
+      'x-pie-req-header-user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      'x-pie-req-meta-follow-redirects': 'true',
+      'x-pie-req-meta-method': 'GET',
+      'x-pie-req-meta-ssl-verify': 'true',
+      'x-pie-req-meta-url': 'https://webcast.tiktok.com/webcast/feed/?aid=1988&app_language=en&app_name=tiktok_web&browser_language=en-US&browser_name=Mozilla&browser_online=true&browser_platform=Win32&browser_version=5.0%20%28Windows%20NT%2010.0%3B%20Win64%3B%20x64%29%20AppleWebKit%2F537.36%20%28KHTML%2C%20like%20Gecko%29%20Chrome%2F135.0.0.0%20Safari%2F537.36&channel=tiktok_web&channel_id=88&cookie_enabled=true&data_collection_enabled=true&device_id=7484883874386101778&device_platform=web_pc&device_type=web_h264&focus_state=true&from_page=following&history_len=9&is_fullscreen=false&is_non_personalized=0&is_page_visible=true&max_time=0&os=windows&priority_region=CO&referer=&region=US&req_from=live_mt_pc_web_follow_tab_refresh&root_referer=https%3A%2F%2Fwww.tiktok.com%2F&screen_height=1080&screen_width=1920&tz_name=Asia%2FKarachi&user_is_login=true',
+    };
+
+    try {
+      String? resposne = await WebUtils.makeGetRequest(HTTPIE_PROXY_URL,headers: headers);
+      TiktokLiveResponse tiktokLiveResponse = TiktokLiveResponse.fromJson(jsonDecode(resposne!));
+      usersList = tiktokLiveResponse.data;
+    } catch (e) {
+      print(e);
+    }
+
+    return usersList;
+  }
+
+  Future<void> runWithDelay(
+      List<Future Function()> futureFactories,
+      Duration delay,
+      ) async {
+    List<Future> futures = [];
+
+    for (var factory in futureFactories) {
+      futures.add(factory());
+      await Future.delayed(delay); // Delay before starting the next one
+    }
+
+    await Future.wait(futures); // Wait for all to complete
+  }
+
+
 
 }

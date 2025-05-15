@@ -8,7 +8,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:async/async.dart';
-import 'package:background_mode_new/background_mode_new.dart';
+// import 'package:background_mode_new/background_mode_new.dart';
 import 'package:blinking_text/blinking_text.dart';
 import 'package:butterfly_dialog/butterfly_dialog.dart';
 import 'package:dropdown_textfield/dropdown_textfield.dart';
@@ -27,8 +27,10 @@ import 'package:kuaishou_remote_uploader/models/kuaishou_live_user.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_download_status.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
+import 'package:kuaishou_remote_uploader/models/tiktok_live_response.dart';
 import 'package:kuaishou_remote_uploader/models/user_kuaishou.dart';
 import 'package:kuaishou_remote_uploader/streamtape_download_screen.dart';
+import 'package:kuaishou_remote_uploader/utils/gist_service.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
 import 'package:kuaishou_remote_uploader/utils/web_utils.dart';
@@ -39,6 +41,7 @@ import 'package:restart/restart.dart';
 import 'package:sizer/sizer.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:stop_watch_timer/stop_watch_timer.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 final service = FlutterBackgroundService();
 Future<void> startBackgroundService() async {
@@ -55,8 +58,10 @@ Future<bool> isServiceRunning () async
 }
 
 const notificationChannelId = 'my_foreground';
+const notificationChannelId2 = 'my_foreground2';
 
 const notificationId = 888;
+const notificationId2 = 889;
 
 Future<void> initializeService(bool autoStartService) async {
 
@@ -68,12 +73,25 @@ Future<void> initializeService(bool autoStartService) async {
     importance: Importance.defaultImportance, // importance must be at low or higher level
   );
 
+  const AndroidNotificationChannel channel2 = AndroidNotificationChannel(
+    notificationChannelId2, // id
+    'MY FOREGROUND SERVICE2', // title
+    description:
+    'This channel is used for important notifications.1', // description
+    importance: Importance.defaultImportance, // importance must be at low or higher level
+  );
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel2);
   await service.configure(
     iosConfiguration: IosConfiguration(
       autoStart: autoStartService,
@@ -174,8 +192,8 @@ Timer unfollowLaunchTimer(Duration duration,{ required Function callback})
 {
   return Timer(duration, () {
 
-      List<UserKuaishou> list = Get.find<AppController>().getAllUserList();
-      List<UserKuaishou> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
+      List<SocialUser> list = Get.find<AppController>().getAllUserList();
+      List<SocialUser> listFiltered = list.where((user)=>user.value!.contains("<||>UNFOLLOW")).toList();
       int totalMin = getUnfollowMin(listFiltered);
       SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_CURRENT_UNFOLLOW_MIN, totalMin);
       Get.find<AppController>().unfollowCurrentTime.value = totalMin;
@@ -186,7 +204,7 @@ Timer unfollowLaunchTimer(Duration duration,{ required Function callback})
   });
 }
 
-int getUnfollowMin(List<UserKuaishou> userList)
+int getUnfollowMin(List<SocialUser> userList)
 {
   if (!SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_CONCURRENT_UNFOLLOW_USER_UPLOADING,defaultValue: true)) {
     int userListSize = userList.length;
@@ -212,6 +230,23 @@ Future<void> showNotification({required String title,required String content}) a
     const NotificationDetails(
       android: AndroidNotificationDetails(
         notificationChannelId,
+        'MY FOREGROUND SERVICE',
+        icon: 'ic_bg_service_small',
+        ongoing: true,
+      ),
+    ),
+  );
+}
+
+Future<void> showNotification2({required String title,required String content}) async
+{
+  await FlutterLocalNotificationsPlugin().show(
+    notificationId2,
+    title,
+    content,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        notificationChannelId2,
         'MY FOREGROUND SERVICE',
         icon: 'ic_bg_service_small',
         ongoing: true,
@@ -251,8 +286,11 @@ void onStart(ServiceInstance service) async {
   List<Duration> listDuration = [Duration(minutes: midNightDuration),Duration(minutes: morningAfterNoonDuration),Duration(minutes: eveningNightDuration)];
 
   int userOnline = 0;
+  int tUserOnline = 0;
   int userNewUploaded = 0;
+  int tUerNewUploaded = 0;
   int userOldUploaded = 0;
+  int tUserOldUploaded = 0;
 
 
   Timer timer = makePeriodicTimer(getDurationBaseOnTime(listDuration),timeSpecificDuration:listDuration,(timer) async {
@@ -295,8 +333,10 @@ void onStart(ServiceInstance service) async {
       Hive.init(appDocumentDirectory.path);
       await Hive.close();
       appController.usernameListIdBox = await Hive.openBox("usernameListIdBox");
-      List<UserKuaishou> list = appController.getAllUserList();
-      await appController.createFolderOnNextDay();
+      appController.kuaishouLiveUserListBox = await Hive.openBox("kuaishouLiveUserListBox");
+
+      List<SocialUser> list = appController.getAllUserList();
+      await appController.createFolderForCurrentDayIfNotExists();
 
       List<StreamtapeDownloadStatus> streamTapeDownloadStatusList = await appController.getRemoteDownloadingStatus_background();
       List<StopWatchTimer> listStopWatchTimer = [];
@@ -326,6 +366,9 @@ void onStart(ServiceInstance service) async {
         stopWatchTimer.onStartTimer();
         listStopWatchTimer.add(stopWatchTimer);
       });
+      await appController.kuaishouLiveUserListBox!.clear();
+      List<String?> liveUserIdList = liveUserList.$1.map((e) => e.author!.id).toList();
+      appController.kuaishouLiveUserListBox!.put("live_user_id_list", liveUserIdList);
 
       for(StopWatchTimer stopwatch in listStopWatchTimer)
       {
@@ -337,7 +380,7 @@ void onStart(ServiceInstance service) async {
       userNewUploaded = 0;
       userOldUploaded = 0;
       if (liveUserList.$1.length > 0) {
-        for (UserKuaishou userKuaishou in list) {
+        for (SocialUser userKuaishou in list) {
 
           await showNotification(title: "Uploading Service (${remainingTime} (${list.indexOf(userKuaishou) + 1}/${list.length})) ",content: "⏳ UPLOADING ON STREAMTAPE : ${userKuaishou.value!}");
           for (ListElement user in liveUserList.$1) {
@@ -359,7 +402,7 @@ void onStart(ServiceInstance service) async {
             }
           }
         isProcessingDone = true;
-        await showNotification(title: "Uploading Service (${remainingTime})",content: "✅ User Online: ${userOnline} | Newly Uploaded User: ${userNewUploaded} | Current User Uploading: ${userOldUploaded}");
+        await showNotification(title: "Kuaishou Uploading Service (${remainingTime})",content: "✅ User Online: ${userOnline} | Newly Uploaded User: ${userNewUploaded} | Current User Uploading: ${userOldUploaded}");
       }
       else
         {
@@ -374,6 +417,36 @@ void onStart(ServiceInstance service) async {
               await showNotification(title: "Uploading Service (${remainingTime})",content: "❌ User list is empty.....");
             }
         }
+
+      List<SocialUser> tiktokUserList = list.where((element) => element.value!.contains("<||>TIKTOK")).toList();
+      List<TiktokUser> tikokLiveUserList= await appController.getTiktokLiveUserList();
+      tUserOnline = tikokLiveUserList.length;
+      tUerNewUploaded = 0;
+      tUserOldUploaded = 0;
+      for(SocialUser user in tiktokUserList)
+        {
+          await showNotification2(title: "Tiktok Uploading Service (${tiktokUserList.indexOf(user) + 1}/${tiktokUserList.length})) ",content: "⏳ UPLOADING ON STREAMTAPE : ${user.value!}");
+          try {
+            for(TiktokUser tiktokUser in tikokLiveUserList)
+              {
+                if (tiktokUser.data!.owner!.displayId == user.value!.replaceAll("<||>TIKTOK", "")) {
+                  String? streamURL = tiktokUser.data?.streamUrl?.flvPullUrl?.fullHd1 ?? tiktokUser.data?.streamUrl?.flvPullUrl?.hd1 ?? tiktokUser.data?.streamUrl?.flvPullUrl?.sd1 ?? tiktokUser.data?.streamUrl?.flvPullUrl?.sd2;
+                  bool isUploaded = await appController.startUploading_background(streamURL!, streamTapeDownloadStatusList,isTiktok: true);
+                  if(isUploaded)
+                  {
+                    tUerNewUploaded++;
+                  }
+                  else
+                  {
+                    tUserOldUploaded++;
+                  }
+                }
+              }
+          } catch (e) {
+            print(e);
+          }
+          await showNotification2(title: "Tiktok Uploading Service",content: "✅ User Online: ${tUserOnline} | Newly Uploaded User: ${tUerNewUploaded} | Current User Uploading: ${tUserOldUploaded}");
+        }
     }
     // });
   },fireNow: true,isCustomTimer: true);
@@ -384,6 +457,7 @@ void onStart(ServiceInstance service) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
   final appDocumentDirectory = await getApplicationDocumentsDirectory();
   Hive.init(appDocumentDirectory.path);
   await SharedPrefsUtil.initSharedPreference();
@@ -470,7 +544,9 @@ class _MyHomePageState extends State<MyHomePage> {
           onResume: () async {
             if (previousState!= null && !appController.isDownloadStatusUpdating.value) {
               await SharedPrefsUtil.reloadSharedPreferences();
-              await appController.verifyCaptcha(isRefresh: true);
+              if (SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_UPLOADING,defaultValue: false) && !SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_AUTO_UNFOLLOW_USER_CAPTCHA_VERIFICATION,defaultValue: true)) {
+                await appController.verifyCaptcha(isRefresh: true);
+              }
               DateTime currentDateTime = DateTime.now();
               String folderName = "Kwai ${currentDateTime.day} ${currentDateTime.month} ${currentDateTime.year % 100}";
               if(appController.selectedFolder.value.name != folderName && folderName == SharedPrefsUtil.getString(SharedPrefsUtil.KEY_SELECTED_FOLDER, defaultValue: ""))
@@ -584,17 +660,11 @@ class _MyHomePageState extends State<MyHomePage> {
                 switch(item)
                     {
                   case "refresh":
-                    //WebViewUtils webViewUtils = WebViewUtils();
-                    //String? oLink = await WebUtils.getOriginalUrl("https://v.kuaishou.com/9rBZxQ");
-                    //webViewUtils.showWebViewDialog("https://klsxvkqw.m.chenzhongtech.com/fw/live/cyl51666888?cc=share_copylink&followRefer=151&shareMethod=TOKEN&docId=5&kpn=NEBULA&subBiz=LIVE_STREAM&shareId=18188504186071&shareToken=X-5rYqLYfLEz116u&shareResourceType=LIVESTREAM_OTHER&userId=24561342&shareType=5&et=1_a%2F2007896619798938993_nle2&shareMode=APP&efid=0&originShareId=18188504186071&appType=21&shareObjectId=pexFVhEe5uk&shareUrlOpened=0&timestamp=173401333806", ".flv");
+                    // String roomId = await appController.getRoomIdFromUser("i_am_husna77");
+                    // String streamUrl = await appController.getLiveUrl(roomId);
+                    // print(streamUrl);
                     await appController.showReauthenticateStreamtapeDialog();
-                    //await appController.getLiveUserList();
-                    // var header = {"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"};
-                    // String? orginalUrl = await WebUtils.getOriginalUrl("https://v.kuaishou.com/cx20Ka",headers: header);
-                    // String? response = await WebUtils.makeGetRequest(orginalUrl!,headers: header);
-                    // print(response);
-                    // String? response2 = await appController.getStreamUrlForBackgroundUpload_Web2("https://v.kuaishou.com/cx20Ka");
-                    // print(response2);
+
                    case "streamtape_downloader":
                     Get.to(StreamtapeDownloadScreen());
                    case "clone_streamtape_folders":
@@ -618,24 +688,95 @@ class _MyHomePageState extends State<MyHomePage> {
                   case "restart_background_service":
                     appController.restartBackgroundService(isToEnableSlider: false);
                   case "export_users":
-                    appController.saveListToFile();
+                    appController.exportUsers();
                   case "import_users":
-                    bool isAdded = await appController.importUsersToHive();
+                    bool isAdded = await appController.importUsers();
                     if (isAdded) {
                       appController.restartBackgroundService(isToEnableSlider: false);
                     }
+                  case "export_users_gist":
+                    appController.exportUsers(isGist: true);
+                  case "import_users_gist":
+                    bool isAdded = await appController.importUsers(isGist: true);
+                    if (isAdded) {
+                      appController.restartBackgroundService(isToEnableSlider: false);
+                    }
+                  case "open_custom_unfollow_cookie_dialog":
+                    DialogUtils.showCustomCookieDialog(context: context, onSave: (value) async {
+                      SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, value);
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
+                    });
+                  case "open_live_users_dialog":
+                    List<String> list = appController.kuaishouLiveUserListBox!.get("live_user_id_list").cast<String>();
+                    DialogUtils.showCopyListDialog(context,list);
+
 
                 }
               },
               itemBuilder: (context) => [
+                PopupMenuItem(
+                  child: Obx(()=> Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Text((appController.isUnfollowUserProcessing.value ? "Unfollow User Uploading in Progress (Interval Duration : ${appController.unfollowCurrentTime.value} min)" :"Unfollow User Background Timer (Interval Duration : ${appController.unfollowCurrentTime.value} min)") + " " + appController.unfollowUploadRemainingTime.value),
+                      Text("Total Unfollowed User : ${appController.totalUnfollowUserUploadedProgress.value}",style: TextStyle(color: Colors.purpleAccent),),
+                      Text("User Uploaded : ${appController.unfollowUserUploaded.value}",style: TextStyle(color: Colors.green),),
+                      Text("Users Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
+                      Text("Users Offline : ${appController.unfollowUserOffline.value}",style: TextStyle(color: Colors.orange),),
+                      Text("Execption Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
+                      Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
+                      Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
+                      Text("Live Stream Over : ${appController.unfollowLiveStreamOver.value}",style: TextStyle(color: Colors.purple),),
+                      Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
+                      Text("Unfollow Timer Interval (Unfollow Users)"),
+                      Slider(
+                          value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
+                          max: 20,
+                          min: 5,
+                          divisions: 15,
+                          label: appController.unfollowUserIntervalSliderValue.toString(),
+                          onChanged: (double value) {
+                            appController.unfollowUserIntervalSliderValue.value = value.toInt();
+                          },
+                          onChangeEnd: (value) async {
+                            SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
+
+
+                          }
+                      ),
+                      Text("Unfollow Api Interval (${appController.unfollowApiIntervalRangeValue.value.start.toInt()} -> ${appController.unfollowApiIntervalRangeValue.value.end.toInt()})"),
+                      RangeSlider(
+                        values: appController.unfollowApiIntervalRangeValue.value,
+                        max: 60,
+                        min: 5,
+                        divisions: 55,
+                        labels: RangeLabels(
+                          appController.unfollowApiIntervalRangeValue.value.start.toInt().toString(),
+                          appController.unfollowApiIntervalRangeValue.value.end.toInt().toString(),
+                        ),
+                        onChanged: (RangeValues values) {
+                          print("range slider is changing......");
+                          appController.unfollowApiIntervalRangeValue.value = values;
+
+                        },
+                        onChangeEnd: (RangeValues values){
+                          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL, "${values.start.toInt()}:${values.end.toInt()}");
+                        },
+                      )
+                    ],)),
+                ),
                 PopupMenuItem<String>(value: "add_user", child: Text('Add User')),
                 PopupMenuItem<String>(value: "restart_background_service", child: Text('Restart Background Service')),
                 PopupMenuItem<String>(value: "refresh", child: Text('Refresh')),
                 PopupMenuItem<String>(value: "export_users", child: Text('Export Users')),
                 PopupMenuItem<String>(value: "import_users", child: Text('Import Users')),
+                PopupMenuItem<String>(value: "export_users_gist", child: Text('Export Users to Git')),
+                PopupMenuItem<String>(value: "import_users_gist", child: Text('Import Users from Git')),
                 PopupMenuItem<String>(value: "get_follow_live_api_cookie", child: Text('Get Follow Live Api Cookie')),
                 PopupMenuItem<String>(value: "get_unfollow_live_cookie", child: Text('Get Unfollow Live Cookie')),
                 PopupMenuItem<String>(value: "streamtape_downloader", child: Text('Streamtape Downloader')),
+                PopupMenuItem<String>(value: "open_custom_unfollow_cookie_dialog", child: Text('Open Custom Unfollow Cookie Dialog')),
+                PopupMenuItem<String>(value: "open_live_users_dialog", child: Text('Open Live Users Dialog')),
                 PopupMenuItem<String>(value: "clone_streamtape_folders", child: DateTime.now().day == 1 ? BlinkText(
                   'Clone Streamtape Folder',
                   beginColor: Colors.black,
@@ -669,6 +810,19 @@ class _MyHomePageState extends State<MyHomePage> {
                       //await restart();
                     },
                     title: Text("Enable Uploading to Streamtape"),
+                  ),
+
+                  ),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isAutoUnfollowCaptchaVerification.value,
+                    onChanged: (value) async {
+                      appController.isAutoUnfollowCaptchaVerification.value = !appController.isAutoUnfollowCaptchaVerification.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_ENABLE_AUTO_UNFOLLOW_USER_CAPTCHA_VERIFICATION, appController.isAutoUnfollowCaptchaVerification.value);
+                    },
+                    title: Text("Enable Auto Unfollow Users Captcha Verification"),
                   ),
 
                   ),
@@ -729,6 +883,30 @@ class _MyHomePageState extends State<MyHomePage> {
                 PopupMenuItem(
                   child: Obx(()=> CheckboxListTile(
                     activeColor: Colors.blue,
+                    value: appController.isRandomCaptchaUserEnable.value,
+                    onChanged: (value){
+                      appController.isRandomCaptchaUserEnable.value = !appController.isRandomCaptchaUserEnable.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_RANDOM_CAPTCHA_USER, appController.isRandomCaptchaUserEnable.value);
+                    },
+                    title: Text("Enable Captcha Verification with Random Users"),
+                  ),
+
+                  ),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isUnfollowUploadwithDeplayEnable.value,
+                    onChanged: (value){
+                      appController.isUnfollowUploadwithDeplayEnable.value = !appController.isUnfollowUploadwithDeplayEnable.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_ENABLE_UNFOLLOW_UPLOAD_WITH_DELAY, appController.isUnfollowUploadwithDeplayEnable.value);
+                    },
+                    title: Text("Enable Unfollow Concurrent Uploading with Delay"),
+                  ),),
+                ),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
                     value: appController.isBackgroundModeEnable.value,
                     onChanged: (value){
                       appController.isBackgroundModeEnable.value = !appController.isBackgroundModeEnable.value;
@@ -736,9 +914,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       appController.processBackgroundMode();
                     },
                     title: Text("Enable Background Mode"),
-                  ),
-
-                  ),
+                  ),),
                 ),
                 PopupMenuItem(child: Obx(()=> appController.isBackGroundModeTimeRadioButtonsVisible.value ? Row(
                             children: <Widget>[
@@ -773,9 +949,8 @@ class _MyHomePageState extends State<MyHomePage> {
                               ),
                             ],
                           ) : SizedBox.shrink(),
-                )
+                )),
 
-                ),
                 PopupMenuItem(child: Obx(()=> appController.isBackgroundModeRangeSliderVisible.value ? Column(mainAxisAlignment: MainAxisAlignment.start,children: [
                   Text("Background Mode Time Interval (24 H) (${appController.backgroundModeTimeSpecificRangeValue.value.start.toInt()} -> ${appController.backgroundModeTimeSpecificRangeValue.value.end.toInt()})"),
                   RangeSlider(
@@ -882,57 +1057,6 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                   ],)),
                 ),
-                PopupMenuItem(
-                  child: Obx(()=> Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    children: [
-                      Text((appController.isUnfollowUserProcessing.value ? "Unfollow User Uploading in Progress (Interval Duration : ${appController.unfollowCurrentTime.value} min)" :"Unfollow User Background Timer (Interval Duration : ${appController.unfollowCurrentTime.value} min)") + " " + appController.unfollowUploadRemainingTime.value),
-                      Text("Total Unfollowed User : ${appController.totalUnfollowUserUploadedProgress.value}",style: TextStyle(color: Colors.purpleAccent),),
-                      Text("User Uploaded : ${appController.unfollowUserUploaded.value}",style: TextStyle(color: Colors.green),),
-                      Text("Users Online : ${appController.unfollowUserOnline.value}",style: TextStyle(color: Colors.blue),),
-                      Text("Users Offline : ${appController.unfollowUserOffline.value}",style: TextStyle(color: Colors.orange),),
-                      Text("Execption Errors : ${appController.unfollowUserError.value}",style: TextStyle(color: Colors.redAccent),),
-                      Text("Captcha Errors : ${appController.unfollowUserErrorCaptcha.value}",style: TextStyle(color: Colors.red),),
-                      Text("Frequent Requests : ${appController.unfollowUserFrequentRequests.value}",style: TextStyle(color: Colors.indigo),),
-                      Text("Live Stream Over : ${appController.unfollowLiveStreamOver.value}",style: TextStyle(color: Colors.purple),),
-                      Text("Other Errors : ${appController.unfollowUserOthers.value}",style: TextStyle(color: Colors.black54),),
-                      Text("Unfollow Timer Interval (Unfollow Users)"),
-                      Slider(
-                          value: appController.unfollowUserIntervalSliderValue.value.toDouble(),
-                          max: 15,
-                          min: 5,
-                          divisions: 10,
-                          label: appController.unfollowUserIntervalSliderValue.toString(),
-                          onChanged: (double value) {
-                            appController.unfollowUserIntervalSliderValue.value = value.toInt();
-                          }, 
-                          onChangeEnd: (value) async {
-                            SharedPrefsUtil.setInt(SharedPrefsUtil.KEY_UNFOLLOW_USER_TIMER, value.toInt());
-
-
-                          }
-                      ),
-                      Text("Unfollow Api Interval (${appController.unfollowApiIntervalRangeValue.value.start.toInt()} -> ${appController.unfollowApiIntervalRangeValue.value.end.toInt()})"),
-                      RangeSlider(
-                        values: appController.unfollowApiIntervalRangeValue.value,
-                        max: 60,
-                        min: 5,
-                        divisions: 55,
-                        labels: RangeLabels(
-                          appController.unfollowApiIntervalRangeValue.value.start.toInt().toString(),
-                          appController.unfollowApiIntervalRangeValue.value.end.toInt().toString(),
-                        ),
-                        onChanged: (RangeValues values) {
-                          print("range slider is changing......");
-                          appController.unfollowApiIntervalRangeValue.value = values;
-
-                        },
-                        onChangeEnd: (RangeValues values){
-                          SharedPrefsUtil.setString(SharedPrefsUtil.KEY_UNFOLLOW_API_INTERVAL, "${values.start.toInt()}:${values.end.toInt()}");
-                        },
-                      )
-                    ],)),
-                )
               ],
 
             ),
@@ -992,7 +1116,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   bool isFolderExists = appController.streamTapeFolder!.folders!.any((value) => appController.folderTextEditingController.text.trim() == value.name);
                                   if(!isFolderExists)
                                   {
-                                    DialogUtils.showLoaderDialog(context,text: "Creating folder.....");
+                                    DialogUtils.showLoaderDialog(context,text: "Creating folder.....".obs);
                                     (bool,String) isFolderCreated =  await appController.createFolder(appController.folderTextEditingController.text.trim());
                                     if(isFolderCreated.$1)
                                     {
@@ -1013,7 +1137,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                 }
                                 else
                                 {
-                                  DialogUtils.showLoaderDialog(context,text: "Renaming folder....");
+                                  DialogUtils.showLoaderDialog(context,text: "Renaming folder....".obs);
                                   bool isUpdated = await appController.renameFolder(appController.folderTextEditingController.text, appController.selectedFolder.value.id!);
                                   if(isUpdated)
                                   {
@@ -1144,7 +1268,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                     alertType: AlertType.delete,
                                     onConfirm: () async {
                                       bool isDeleted = await appController.deleteFolder(appController.selectedFolder.value.id!);
-                                      DialogUtils.showLoaderDialog(context,text: "Deleting folder....");
+                                      DialogUtils.showLoaderDialog(context,text: "Deleting folder....".obs);
                                       if(isDeleted)
                                       {
                                         appController.showToast("Folder Deleted Successfully...");
@@ -1199,90 +1323,102 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                   SizedBox(height: 10,),
-                  GetBuilder<AppController>(
-                    id: "updateDownloadingList",
-                    builder: (_)
-                    {
-                      return Column(
+                  ExpansionTile(
+                    title: const Text(
+                      'Users List',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 20,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    children: [
+                      GetBuilder<AppController>(
+                        id: "updateDownloadingList",
+                        builder: (_)
+                        {
+                          return Column(
 
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
-                                SizedBox(width: 10,),
-                                Obx(()=>appController.isDownloadStatusUpdating.value ? Center(child: SizedBox(height: 36,width: 36, child: CircularProgressIndicator()),)  :IconButton(
-                                  onPressed: () async {
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text("Total Downloading Links :" + appController.downloadingList.length.toString()),
+                                  SizedBox(width: 10,),
+                                  Obx(()=>appController.isDownloadStatusUpdating.value ? Center(child: SizedBox(height: 36,width: 36, child: CircularProgressIndicator()),)  :IconButton(
+                                    onPressed: () async {
                                       if (!appController.isConcurrentProcessing.value) {
                                         await appController.getDownloadingVideoStatus();
                                       } else {
                                         await appController.getConcurrentDownloadingVideoStatus();
                                       }
                                     }, icon: Icon(Icons.refresh),iconSize: 36,))
-                          ],),
+                                ],),
 
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            //height: 300,
-                            child: ListView.builder(
-                                shrinkWrap: true,
-                                physics: NeverScrollableScrollPhysics(),
-                                controller: appController.scrollController,
-                                itemCount: appController.downloadingList.length,
-                                itemBuilder: (context,index){
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    child: Row(
-                                      children: [
-                                        Text((index+1).toString(),style:TextStyle(fontSize: 15,color: getTextColor(appController.downloadingList[index]!.status!) )),
-                                        SizedBox(width: 5,),
-                                        GetBuilder<AppController>(
-                                          id : "updateVideoThumbnail",
-                                          builder: (_) {
-                                            return InkWell(
-                                              onTap: () async {
-                                                await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                              Container(
+                                padding: EdgeInsets.all(12),
+                                //height: 300,
+                                child: ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: NeverScrollableScrollPhysics(),
+                                    controller: appController.scrollController,
+                                    itemCount: appController.downloadingList.length,
+                                    itemBuilder: (context,index){
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        child: Row(
+                                          children: [
+                                            Text((index+1).toString(),style:TextStyle(fontSize: 15,color: getTextColor(appController.downloadingList[index]!.status!) )),
+                                            SizedBox(width: 5,),
+                                            GetBuilder<AppController>(
+                                              id : "updateVideoThumbnail",
+                                              builder: (_) {
+                                                return InkWell(
+                                                  onTap: () async {
+                                                    await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                                                  },
+                                                  child: SizedBox(
+                                                      height: 150,
+                                                      width: 100,
+                                                      child: appController.downloadingList[index]!.imageBytes == null ? Text("No Image Found") : Image.memory(appController.downloadingList[index]!.imageBytes!,)
+                                                  ),
+                                                );
                                               },
-                                              child: SizedBox(
-                                                height: 150,
-                                                width: 100,
-                                                child: appController.downloadingList[index]!.imageBytes == null ? Text("No Image Found") : Image.memory(appController.downloadingList[index]!.imageBytes!,)
-                                              ),
-                                            );
-                                          },
 
-                                        ),
-                                        Expanded(child: Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
-                                        )),
-                                        Obx( ()=> !appController.downloadingList[index].isThumbnailUpdating!.value ? IconButton(onPressed: () async {
-                                          appController.downloadingList[index].isThumbnailUpdating!.value = true;
-                                            await appController.updateVideoThumbnail(appController.downloadingList[index]);
-                                          appController.downloadingList[index].isThumbnailUpdating!.value = false;
-                                          }, icon: Icon(Icons.refresh),iconSize: 24,) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,))
-                                        ),
-                                        IconButton(onPressed: () async {
-                                          await appController.showDeleteRemoteUploadingDialog(appController.downloadingList[index]!.id!);
-                                        }, icon: Icon(Icons.delete),iconSize: 24,),
-                                        appController.downloadingList[index]!.isUnfollowUser! ? Container(width: 12,height: 12,decoration: BoxDecoration(color:Colors.green,shape: BoxShape.circle),) : SizedBox.shrink(),
+                                            ),
+                                            Expanded(child: Padding(
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
+                                            )),
+                                            Obx( ()=> !appController.downloadingList[index].isThumbnailUpdating!.value ? IconButton(onPressed: () async {
+                                              appController.downloadingList[index].isThumbnailUpdating!.value = true;
+                                              await appController.updateVideoThumbnail(appController.downloadingList[index]);
+                                              appController.downloadingList[index].isThumbnailUpdating!.value = false;
+                                            }, icon: Icon(Icons.refresh),iconSize: 24,) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,))
+                                            ),
+                                            IconButton(onPressed: () async {
+                                              await appController.showDeleteRemoteUploadingDialog(appController.downloadingList[index]!.id!);
+                                            }, icon: Icon(Icons.delete),iconSize: 24,),
+                                            appController.downloadingList[index]!.isUnfollowUser! ? Container(width: 12,height: 12,decoration: BoxDecoration(color:Colors.green,shape: BoxShape.circle),) : appController.downloadingList[index]!.isTiktokUser! ? Container(width: 12,height: 12,decoration: BoxDecoration(color:Colors.blue,shape: BoxShape.circle),)  :  SizedBox.shrink(),
 
-                                      ],
-                                    ),
-                                  );
-                                  // return ListTile(onTap: () async {
-                                  //   await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
-                                  // },
-                                  //  leading: Text((index+1).toString(),style:TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) )),
-                                  //  title: Padding(
-                                  //  padding: const EdgeInsets.all(8.0),
-                                  //  child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
-                                  // ));
-                                }),
-                          )
-                        ],
-                      );
-                    },
+                                          ],
+                                        ),
+                                      );
+                                      // return ListTile(onTap: () async {
+                                      //   await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.downloadingList[index].url!);
+                                      // },
+                                      //  leading: Text((index+1).toString(),style:TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) )),
+                                      //  title: Padding(
+                                      //  padding: const EdgeInsets.all(8.0),
+                                      //  child: Text(appController.downloadingList[index]!.url!,style: TextStyle(fontSize: 10,color: getTextColor(appController.downloadingList[index]!.status!) ),),
+                                      // ));
+                                    }),
+                              )
+                            ],
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

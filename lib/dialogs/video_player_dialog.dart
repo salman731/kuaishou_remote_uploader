@@ -15,7 +15,7 @@ class VideoPlayerDialog
 
   static showLoaderDialog(BuildContext context,String url,{bool isToShowSlider = false}) async{
 
-    DialogUtils.showLoaderDialog(context,text: "Loading Player");
+    DialogUtils.showLoaderDialog(context,text: "Loading Player".obs);
     videoCompleter = Completer();
     _controller =  VideoPlayerController.networkUrl(Uri.parse(url))
       ..initialize().then((value){

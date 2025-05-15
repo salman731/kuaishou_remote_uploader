@@ -1,10 +1,10 @@
 
 
-class UserKuaishou
+class SocialUser
 {
   String? id;
 
   String? value;
 
-  UserKuaishou({this.id, this.value});
+  SocialUser({this.id, this.value});
 }

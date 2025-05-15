@@ -58,9 +58,17 @@ class WebUtils
    }
 
 
-   static Future<String> makePostRequest (String url,Object body, {Map<String,String>? headers,Function(String?)? requestCookieCallBack}) async
+   static Future<String> makePostRequest (String url,Object body, {Map<String,String>? headers,Function(String?)? requestCookieCallBack,Duration? timeout}) async
    {
-     http.Response  response = await http.Client().post(Uri.parse(url),body: body,headers: headers);
+     late http.Response response;
+     if(timeout != null)
+     {
+       response = await http.Client().post(Uri.parse(url),body: body,headers: headers).timeout(timeout!);
+     }
+     else
+     {
+       response = await http.Client().post(Uri.parse(url),body: body,headers: headers);
+     }
      if(requestCookieCallBack != null)
        {
          requestCookieCallBack(response.headers["set-cookie"]);
@@ -107,6 +115,7 @@ class WebUtils
      } catch (e) {
        print(e);
      }
+     return "";
      /*while () {
        response.drain();
        final location = response.headers.value(HttpHeaders.locationHeader);

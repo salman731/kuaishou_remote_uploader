@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
+import 'package:kuaishou_remote_uploader/dialogs/dialog_utils.dart';
 import 'package:kuaishou_remote_uploader/dialogs/video_player_dialog.dart';
 import 'package:kuaishou_remote_uploader/models/download_item.dart';
 import 'package:kuaishou_remote_uploader/models/streamtape_folder_item.dart';
@@ -23,7 +24,8 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
 
   @override
   void initState() {
-    appController.selectedDownloadFolder.value = appController.streamTapeFolder!.folders!.first;
+    String folderName = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_DOWNLOADING_FOLDER);
+    appController.selectedDownloadFolder.value = folderName.isEmpty ? appController.streamTapeFolder!.folders!.first : appController.streamTapeFolder!.folders!.where((f)=>f.name == folderName).first;
     downloadingFolder.value = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_DOWNLOADING_FOLDER);
   }
 
@@ -112,7 +114,10 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                   IconButton(
                     onPressed: () async {
                       appController.showDeleteDialog(() async {
+                        DialogUtils.showLoaderDialog(Get.context!,text: "Deleting duplicated files......".obs);
                         await appController.deleteDuplicateFiles(appController.selectedDownloadFolder.value.id!);
+                        await appController.getDownloadLinks(appController.selectedDownloadFolder.value.id!);
+                        DialogUtils.stopLoaderDialog();
                       },title: "Clean Streamtape Folder",msg: "Are you sure you want to clean folder?");
 
                     },
