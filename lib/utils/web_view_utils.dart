@@ -7,6 +7,8 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
+import 'package:kuaishou_remote_uploader/dialogs/dialog_utils.dart';
+import 'package:kuaishou_remote_uploader/utils/gist_service.dart';
 import 'package:kuaishou_remote_uploader/utils/shared_prefs_utils.dart';
 import 'package:restart/restart.dart';
 class WebViewUtils
@@ -130,6 +132,20 @@ class WebViewUtils
        content: WebView,
        actions: [
          IconButton(onPressed: () async {
+           DialogUtils.showLoaderDialog(Get.context!,text: "Updating Unfollow Cookie on Gist......".obs);
+           var result = await inAppWebViewController2.evaluateJavascript(source: "document.cookie");
+           (bool,String) gistItem = await GistService.doesFileExist(GistService.unfollowCookie);
+
+           if (gistItem.$1) {
+             // Update existing file
+             await GistService.updateGist(gistItem.$2, result.toString(),GistService.unfollowCookie);
+           } else {
+             // Create new file
+             await GistService.createGist(result.toString(),GistService.unfollowCookie);
+           }
+           DialogUtils.stopLoaderDialog();
+         }, icon: Icon(Icons.upload)),
+         IconButton(onPressed: () async {
            var result = await inAppWebViewController2.evaluateJavascript(source: "document.cookie");
            Clipboard.setData(ClipboardData(text: result.toString()));
            ScaffoldMessenger.of(Get.context!).showSnackBar(SnackBar(content: Text('Cookie Copied to clipboard!!!!!!')));
@@ -144,6 +160,7 @@ class WebViewUtils
            //String cookie = result.toString().split(";").where((cookie)=>cookie.contains("did")).first;
              SharedPrefsUtil.setString(SharedPrefsUtil.KEY_KUAISHOU_COOKIE, result.toString());
              SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_IS_CAPTCHA_VERFICATION_REQUIRED, false);
+             Get.find<AppController>().updateCaptchaVerificationUI();
              Get.back();
            } else {
              List<Cookie> cookies = await CookieManager.instance().getCookies(url: WebUri("https://live.kuaishou.com"));

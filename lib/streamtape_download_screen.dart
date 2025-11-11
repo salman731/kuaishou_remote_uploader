@@ -25,7 +25,8 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
   @override
   void initState() {
     String folderName = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_DOWNLOADING_FOLDER);
-    appController.selectedDownloadFolder.value = folderName.isEmpty ? appController.streamTapeFolder!.folders!.first : appController.streamTapeFolder!.folders!.where((f)=>f.name == folderName).first;
+    StreamTapeFolderItem? downloadingStreamtapeFolder = folderName.isEmpty ? appController.streamTapeFolder!.folders!.first : appController.streamTapeFolder!.folders!.where((f) => f.name == folderName).firstOrNull;
+    appController.selectedDownloadFolder.value = downloadingStreamtapeFolder ?? appController.streamTapeFolder!.folders!.first;
     downloadingFolder.value = SharedPrefsUtil.getString(SharedPrefsUtil.KEY_DOWNLOADING_FOLDER);
   }
 
@@ -33,7 +34,13 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Streamtape Downloader"),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text("Streamtape Downloader",style:TextStyle(fontSize: 18)),
+            Obx(()=> Text("Selected :" + appController.totalSeletedDownloadsCount.value.toString(),style:TextStyle(fontSize: 14)))
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(
@@ -107,6 +114,7 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                   ),
                   IconButton(
                     onPressed: () async {
+                      appController.totalSeletedDownloadsCount.value = 0;
                       await appController.getDownloadLinks(appController.selectedDownloadFolder.value.id!);
                     },
                     icon: Icon(Icons.download),
@@ -200,12 +208,12 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                             SizedBox(width: 10,),
                             IconButton(
                               onPressed: () async {
+                                appController.totalSeletedDownloadsCount.value = 0;
                                 await appController.loadAllItemsLinks();
 
                               }, icon: Icon(Icons.download),iconSize: 36,)
                           ]
                         ],),
-
                       Container(
                         padding: EdgeInsets.all(5),
                         //height: 300,
@@ -224,6 +232,7 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                                     {
                                       appController.showToast("Load stream tape download url first......");
                                     }
+                                  appController.totalSeletedDownloadsCount.value = appController.currentDownloadList.where((item) => item.isSelected!.value == true).length;
                                   appController.update(["updateCopyFloatingActionButtonVisibility"]);
                                 },
                                 onTap: (){
@@ -235,6 +244,7 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                                   {
                                     appController.showToast("Load stream tape download url first......");
                                   }
+                                  appController.totalSeletedDownloadsCount.value = appController.currentDownloadList.where((item) => item.isSelected!.value == true).length;
                                   appController.update(["updateCopyFloatingActionButtonVisibility"]);
                                 },
                                 child: Padding(
@@ -251,7 +261,11 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                                           return InkWell(
                                             onTap: () async {
                                               if (appController.currentDownloadList[index]!.downloadUrl! != null && appController.currentDownloadList[index]!.downloadUrl!.isNotEmpty) {
-                                                await VideoPlayerDialog.showLoaderDialog(Get.context!, appController.currentDownloadList[index]!.downloadUrl!,isToShowSlider: true);
+                                                if (appController.isEnableBetterPlayer.value) {
+                                                  await VideoPlayerDialog.showBetterPlayerDialog(Get.context!, appController.currentDownloadList[index]!.downloadUrl!);
+                                                } else {
+                                                  await VideoPlayerDialog.showVideoPlayerDialog(Get.context!, appController.currentDownloadList[index]!.downloadUrl!,isToShowSlider: true);
+                                                }
                                               }
                                               else
                                                 {
@@ -276,61 +290,84 @@ class _StreamtapeDownloadScreenState extends State<StreamtapeDownloadScreen> {
                                           contentPadding: EdgeInsets.all(2),
                                         ),
                                       )),
-                                      Obx(()=> !appController.currentDownloadList[index]!.isLoading!.value ?  SizedBox(
-                                        height: 28,
-                                        width: 28,
-                                        child: IconButton(onPressed: () async {
-                                              if (!appController.currentDownloadList[index]!.isUrlImage!) {
-                                                await appController.fetchStreamTapeImageAndDownloadUrl(appController.currentDownloadList[index]);
-                                              }
-                                              else
-                                                {
-                                                  try {
-                                                    appController.currentDownloadList[index]!.isLoading!.value = true;
-                                                    appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 1000);
-                                                  } catch (e) {
-                                                    print(e);
+                                      Expanded(
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                              children: [
+                                                Obx(()=> !appController.currentDownloadList[index]!.isLoading!.value ?  SizedBox(
+                                                  height: 28,
+                                                  width: 28,
+                                                  child: IconButton(onPressed: () async {
+                                                    if (!appController.currentDownloadList[index]!.isUrlImage!) {
+                                                      await appController.fetchStreamTapeImageAndDownloadUrl(appController.currentDownloadList[index]);
+                                                    }
+                                                    else
+                                                    {
+                                                      try {
+                                                        appController.currentDownloadList[index]!.isLoading!.value = true;
+                                                        appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 1000);
+                                                      } catch (e) {
+                                                        print(e);
+                                                      }
+                                                      appController.currentDownloadList[index]!.isLoading!.value = false;
+                                                    }
+                                                    appController.update(["updateStreamtapeDownloadingList"]);
+                                                    appController.update(["updateCopyFloatingActionButtonVisibility"]);
+                                                  }, icon: appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]) ? Icon(Icons.refresh) :Icon(Icons.download),iconSize: 24,),
+                                                ) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,)),
+                                                ),
+                                                SizedBox(
+                                                  height: 28,
+                                                  width: 28,
+                                                  child: IconButton(onPressed: () async {
+                                                    if(appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]))
+                                                    {
+                                                      await Clipboard.setData(ClipboardData(text: appController.currentDownloadList[index]!.downloadUrl!));
+                                                      appController.showToast("Copied.....");
+                                                    }
+                                                    else
+                                                    {
+                                                      appController.showToast("Unable to get link.....");
+                                                    }
+
+                                                  }, icon: Icon(Icons.copy),iconSize: 24),
+                                                ),
+                                              ],
+                                            ),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                              children: [
+                                              SizedBox(
+                                                height: 28,
+                                                width: 28,
+                                                child: IconButton(onPressed: () async {
+                                                  appController.currentDownloadList[index]!.isUrlImage = !appController.currentDownloadList[index]!.isUrlImage!;
+                                                  if(appController.currentDownloadList[index]!.isUrlImage! && (appController.currentDownloadList[index]!.imageBytes == null  || appController.currentDownloadList[index]!.imageBytes!.isEmpty)){
+                                                    try {
+                                                      appController.currentDownloadList[index]!.isLoading!.value = true;
+                                                      appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 1000);
+                                                    } catch (e) {
+                                                      print(e);
+                                                    }
+                                                    appController.currentDownloadList[index]!.isLoading!.value = false;
                                                   }
-                                                  appController.currentDownloadList[index]!.isLoading!.value = false;
-                                                }
-                                              appController.update(["updateStreamtapeDownloadingList"]);
-                                              appController.update(["updateCopyFloatingActionButtonVisibility"]);
-                                          }, icon: appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]) ? Icon(Icons.refresh) :Icon(Icons.download),iconSize: 20,),
-                                      ) : SizedBox(width : 24,height:24,child: CircularProgressIndicator(strokeWidth: 2,)),
-                                      ),
-                                      SizedBox(
-                                        height: 28,
-                                        width: 28,
-                                        child: IconButton(onPressed: () async {
-                                          if(appController.isStreamTapeDownloadUrlLoaded(appController.currentDownloadList[index]))
-                                            {
-                                              await Clipboard.setData(ClipboardData(text: appController.currentDownloadList[index]!.downloadUrl!));
-                                              appController.showToast("Copied.....");
-                                            }
-                                          else
-                                            {
-                                              appController.showToast("Unable to get link.....");
-                                            }
+                                                  appController.update(["updateStreamtapeDownloadingList"]);
 
-                                        }, icon: Icon(Icons.copy),iconSize: 20),
-                                      ),
-                                      SizedBox(
-                                        height: 28,
-                                        width: 28,
-                                        child: IconButton(onPressed: () async {
-                                          appController.currentDownloadList[index]!.isUrlImage = !appController.currentDownloadList[index]!.isUrlImage!;
-                                          if(appController.currentDownloadList[index]!.isUrlImage! && (appController.currentDownloadList[index]!.imageBytes == null  || appController.currentDownloadList[index]!.imageBytes!.isEmpty)){
-                                            try {
-                                              appController.currentDownloadList[index]!.isLoading!.value = true;
-                                              appController.currentDownloadList[index]!.imageBytes = await VideoCaptureUtils().captureImage(appController.currentDownloadList[index]!.downloadUrl!, 1000);
-                                            } catch (e) {
-                                              print(e);
-                                            }
-                                            appController.currentDownloadList[index]!.isLoading!.value = false;
-                                          }
-                                          appController.update(["updateStreamtapeDownloadingList"]);
+                                                }, icon: Icon(Icons.image),iconSize: 24,color: !appController.currentDownloadList[index]!.isUrlImage! ? Colors.deepPurple : Colors.green,),
+                                              ),
+                                              SizedBox(
+                                                height: 28,
+                                                width: 28,
+                                                child: IconButton(onPressed: () async {
+                                                  DialogUtils.showThumbnailAlertDialog(context, appController.currentDownloadList[index]!.downloadUrl!);
 
-                                        }, icon: Icon(Icons.image),iconSize: 20,color: !appController.currentDownloadList[index]!.isUrlImage! ? Colors.deepPurple : Colors.green,),
+                                                }, icon: Icon(Icons.collections),iconSize: 24),
+                                              )
+                                            ],)
+                                          ],
+                                        ),
                                       )
                                     ],
                                   ),

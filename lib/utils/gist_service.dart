@@ -8,9 +8,10 @@ class GistService {
   static final String? _token = dotenv.env['GITHUB_TOKEN'];
   static const String _apiUrl = 'https://api.github.com/gists';
   static const String fileName = 'users.txt';
+  static const String unfollowCookie = 'unfollow_cookie.txt';
 
   // Create a new Gist
-  static Future<String> createGist(String text, {String? description}) async {
+  static Future<String> createGist(String text,String filename, {String? description}) async {
     final response = await http.post(
       Uri.parse(_apiUrl),
       headers: {
@@ -21,7 +22,7 @@ class GistService {
         'description': description ?? 'Kuaishou Users List',
         'public': false,
         'files': {
-          fileName: {'content': text},
+          filename: {'content': text},
         },
       }),
     );
@@ -34,7 +35,7 @@ class GistService {
   }
 
   // Update an existing Gist
-  static Future<void> updateGist(String gistId, String newText) async {
+  static Future<void> updateGist(String gistId, String newText,String filename) async {
 
     final response = await http.patch(
       Uri.parse('$_apiUrl/$gistId'),
@@ -44,7 +45,7 @@ class GistService {
       },
       body: jsonEncode({
         'files': {
-          fileName: {'content': newText},
+          filename: {'content': newText},
         },
       }),
     );
@@ -55,7 +56,7 @@ class GistService {
   }
 
   // Fetch Gist content
-  static Future<String> getGist(String gistId) async {
+  static Future<String> getGist(String gistId,String filename) async {
     final response = await http.get(
       Uri.parse('$_apiUrl/$gistId'),
       headers: {
@@ -66,7 +67,7 @@ class GistService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data['files'][fileName]['content'];
+      return data['files'][filename]['content'];
     } else {
       throw Exception('Failed to fetch Gist: ${response.body}');
     }
@@ -110,7 +111,7 @@ class GistService {
   //   }
   // }
 
-  static Future<(bool,String)> doesFileExist() async {
+  static Future<(bool,String)> doesFileExist(String filename) async {
     final response = await http.get(
       Uri.parse('$_apiUrl?per_page=100'), // Get up to 100 gists
       headers: {
@@ -122,7 +123,7 @@ class GistService {
     if (response.statusCode == 200) {
       final List<dynamic> gistsJson = jsonDecode(response.body);
       List<GistItem> list = gistsJson.map((json) => GistItem.fromJson(json)).toList();
-      GistItem? userItem = list.where((item) => item.files.containsKey(fileName)).firstOrNull;
+      GistItem? userItem = list.where((item) => item.files.containsKey(filename)).firstOrNull;
       if(userItem != null)
         {
           return (true,userItem.id);

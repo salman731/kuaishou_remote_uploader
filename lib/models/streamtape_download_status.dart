@@ -20,6 +20,8 @@ class StreamtapeDownloadStatus
 
   bool? isTiktokUser;
 
-  StreamtapeDownloadStatus({this.status,this.url,this.imageBytes,this.id,this.isThumbnailUpdating,this.isUnfollowUser,this.isTiktokUser});
+  String? userListKey;
+
+  StreamtapeDownloadStatus({this.status,this.url,this.imageBytes,this.id,this.isThumbnailUpdating,this.isUnfollowUser,this.isTiktokUser,this.userListKey});
 
 }

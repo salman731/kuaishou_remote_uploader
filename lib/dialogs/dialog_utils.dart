@@ -1,10 +1,14 @@
 
+import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:kuaishou_remote_uploader/controllers/app_controller.dart';
 import 'package:kuaishou_remote_uploader/main.dart';
 import 'package:kuaishou_remote_uploader/models/user_kuaishou.dart';
 import 'package:flutter/services.dart';
+import 'package:kuaishou_remote_uploader/utils/app_strings.dart';
+import 'package:kuaishou_remote_uploader/utils/video_capture_utils.dart';
+import 'package:path/path.dart' as p;
 
 class DialogUtils
 {
@@ -209,6 +213,14 @@ class DialogUtils
                   SizedBox(height: 5,),
                   GetBuilder<AppController>(
                     id: "updateUserList",
+                      builder: (_)
+                  {
+                    List<SocialUser> list = appController.getAllUserList();
+                    return Text("Total Users : " + list.length.toString());
+                  }),
+                  SizedBox(height: 5,),
+                  GetBuilder<AppController>(
+                    id: "updateUserList",
                     builder: (_) {
                       return SizedBox(
                         height: 500,
@@ -371,4 +383,61 @@ class DialogUtils
       },
     );
   }
+
+
+  static void showThumbnailAlertDialog (BuildContext context,String url) async
+  {
+    AppController appController = Get.find<AppController>();
+    VideoCaptureUtils videoCaptureUtils = VideoCaptureUtils();
+   // appController.listThumbnails = [];
+    // appController.fetchThumbnails(url);
+    //appController.listThumbnails =  await VideoCaptureUtils().bulkCaptureImageList("http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4");
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('Thumbnails'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 500,
+            child:StreamBuilder<List<(Uint8List,String)>>(
+              stream: videoCaptureUtils.bulkCaptureImageList(url),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final images = snapshot.data!;
+
+
+                return ListView.builder(
+                  scrollDirection: Axis.vertical,
+                  itemCount: images.length,
+                  itemBuilder: (context, index) {
+                    return /*Column(
+                      children: [*/
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Image.memory(images[index].$1, width: 120,),
+                        );
+                       // Text("(${index}) Is Side Pose Found : ${videoCaptureUtils.sidePoseMap[p.basenameWithoutExtension(images[index].$2)]}"),
+                        //Text("File Name : ${p.basenameWithoutExtension(images[index].$2)}")
+                    //   ],
+                    // );
+                  },
+                );
+              },
+            )
+
+            /*},)*/,
+          ),
+        );
+      },
+    );
+
+    await videoCaptureUtils.dispose();
+
+  }
 }
+
