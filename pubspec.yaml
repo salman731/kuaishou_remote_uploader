@@ -51,7 +51,7 @@ dependencies:
   butterfly_dialog: ^0.0.3
   azlistview: ^2.0.0
   flutter_background_service: ^5.0.10
-  flutter_local_notifications: ^18.0.1
+  flutter_local_notifications: ^19.5.0
   flutter_autostart: ^0.0.2
   html_unescape: ^2.0.0
   stop_watch_timer: ^3.2.1
@@ -79,7 +79,7 @@ dependencies:
       url: https://github.com/mihai1995/background_mode_new.git
   better_player:
     git:
-      url: https://github.com/XenLabsNikhil/betterplayer.git
+      url: https://github.com/salman731/betterplayer.git
 
 
 
@@ -96,11 +96,11 @@ dev_dependencies:
 
 dependency_overrides:
   # TODO: Recheck once flutter_inappwebview version >6.0.0 is released
-  flutter_inappwebview_android:
-    git:
-      url: https://github.com/holzgeist/flutter_inappwebview
-      path: flutter_inappwebview_android
-      ref: d89b1d32638b49dfc58c4b7c84153be0c269d057
+#  flutter_inappwebview_android:
+#    git:
+#      url: https://github.com/holzgeist/flutter_inappwebview
+#      path: flutter_inappwebview_android
+#      ref: d89b1d32638b49dfc58c4b7c84153be0c269d057
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

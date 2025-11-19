@@ -10,7 +10,7 @@ class GistService {
   static const String fileName = 'users.txt';
   static const String unfollowCookie = 'unfollow_cookie.txt';
 
-  // Create a new Gist
+  //Create a new Gist
   static Future<String> createGist(String text,String filename, {String? description}) async {
     final response = await http.post(
       Uri.parse(_apiUrl),
