@@ -1283,6 +1283,18 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),),
                 ),
                 getPopupMenuDivider(),
+                PopupMenuItem(
+                  child: Obx(()=> CheckboxListTile(
+                    activeColor: Colors.blue,
+                    value: appController.isEnableThumbnailWithDirectStreamUrl.value,
+                    onChanged: (value){
+                      appController.isEnableThumbnailWithDirectStreamUrl.value = !appController.isEnableThumbnailWithDirectStreamUrl.value;
+                      SharedPrefsUtil.setBool(SharedPrefsUtil.KEY_THUMBNAIL_WITH_DIRECT_STREAM, appController.isEnableThumbnailWithDirectStreamUrl.value);
+                    },
+                    title: Text("Enable Thumbnail with Direct Streamtape Stream Url"),
+                  ),),
+                ),
+                getPopupMenuDivider(),
                 PopupMenuItem(child: Obx(()=> appController.isBackGroundModeTimeRadioButtonsVisible.value ? Row(
                   children: <Widget>[
                     Expanded(

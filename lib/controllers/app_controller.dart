@@ -134,6 +134,7 @@ class   AppController extends GetxController {
   RxBool isEnableToCaptchaRequiredOnFrequestRequest = false.obs;
   RxBool isEnableBetterPlayer = false.obs;
   RxBool isEnableThumbnailWithInterval = false.obs;
+  RxBool isEnableThumbnailWithDirectStreamUrl = false.obs;
   RxString downloadLinks = "".obs;
   List<DownloadItem> downloadLinksList = [];
   List<DownloadItem> filterdownloadLinksList = [];
@@ -213,6 +214,7 @@ class   AppController extends GetxController {
     isEnableToCaptchaRequiredOnFrequestRequest.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_CAPTCHA_REQUIRED_ON_FREQUEST_REQUEST,);
     isEnableBetterPlayer.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_BETTER_PLAYER,);
     isEnableThumbnailWithInterval.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_THUMBNAIL_WITH_INTERVAL,);
+    isEnableThumbnailWithDirectStreamUrl.value = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_THUMBNAIL_WITH_DIRECT_STREAM,);
     processBackgroundMode();
     midNightSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MIDNIGHT_SLIDER, defaultValue: 15); // 12:00 AM -> 06:00 AM
     morningAfterNoonSliderValue.value = SharedPrefsUtil.getDouble(SharedPrefsUtil.KEY_MORNINGAFTERNOON_SLIDER, defaultValue: 10); // 6:00 AM -> 4:00 PM
@@ -1803,26 +1805,32 @@ class   AppController extends GetxController {
 
   Future<bool> fetchStreamTapeImageAndDownloadUrl(DownloadItem? downloadItem) async
   {
-    downloadItem!.isLoading!.value = true;
-
+    bool isLoadThumbnailFromDirectUrl = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_THUMBNAIL_WITH_DIRECT_STREAM);
+    downloadItem!.isUrlImage = isLoadThumbnailFromDirectUrl;
+    downloadItem.isLoading!.value = true;
     //if (downloadItem!.downloadUrl == null || downloadItem!.downloadUrl == "Press Download icon to get link...."  || downloadItem!.downloadUrl == "Unable to get download url....") {
     try {
       bool isEmbeded = SharedPrefsUtil.getBool(SharedPrefsUtil.KEY_ENABLE_STREAMTAPE_FETCH_FROM_EMBEDED, defaultValue: false);
       (String?, String?)? mp4ImageUrl = isEmbeded ? await getMp4UrlFromStreamTapeEmbded(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: true) : await getMp4UrlFromStreamTapeVideo(downloadItem.streamTapeUrl!, isVideotoEmbededAllowed: false);
-      downloadItem!.downloadUrl = mp4ImageUrl!.$1 != null ? mp4ImageUrl!.$1 : "Unable to get download url....";
-      downloadItem!.imageUrl = mp4ImageUrl!.$2 != null ? mp4ImageUrl!.$2 : "";
+      downloadItem.downloadUrl = mp4ImageUrl!.$1 != null ? mp4ImageUrl!.$1 : "Unable to get download url....";
+      downloadItem.imageUrl = mp4ImageUrl!.$2 != null ? mp4ImageUrl!.$2 : "";
     } catch (e) {
-      downloadItem!.downloadUrl =  "Unable to get download url....";
-      downloadItem!.imageUrl = "";
+      downloadItem.downloadUrl =  "Unable to get download url....";
+      downloadItem.imageUrl = "";
     }
 
-    if(downloadItem.imageUrl!.isEmpty && downloadItem.downloadUrl != "Unable to get download url....")
+
+    if((downloadItem.imageUrl!.isEmpty && downloadItem.downloadUrl != "Unable to get download url....") || isLoadThumbnailFromDirectUrl)
       {
         try {
           downloadItem.imageBytes = await VideoCaptureUtils().captureImage(downloadItem.downloadUrl!, 1000);
           if (downloadItem.imageBytes != null && downloadItem.imageBytes!.isNotEmpty) {
             downloadItem.isUrlImage = true;
           }
+          else
+            {
+              downloadItem.isUrlImage = false;
+            }
         } catch (e) {
           print(e);
         }
